@@ -1,0 +1,51 @@
+# Validator Monitor Configuration
+
+# Beacon Node API endpoint
+beacon_node_url: "http://localhost:5052"
+
+# List of validator indices to monitor
+validators:
+  - 12345
+  - 67890
+  - 111213
+
+# Polling interval in slots (1 slot = 12 seconds)
+polling_interval_slots: 1
+
+# Number of concurrent workers
+worker_pool_size: 10
+
+# Rate limiting configuration
+rate_limit:
+  requests_per_second: 50
+  burst: 100
+
+# HTTP client configuration
+http:
+  timeout_seconds: 30
+  max_idle_conns: 100
+
+# ScyllaDB configuration
+scylladb:
+  # Cluster hosts
+  hosts:
+    - "127.0.0.1:9042"
+  
+  # Keyspace name (will be created if not exists)
+  keyspace: "validator_monitor"
+  
+  # Replication factor for the keyspace
+  replication_factor: 3
+  
+  # Consistency level for writes
+  # Options: any, one, two, three, quorum, all, local_quorum, each_quorum, local_one
+  consistency: "local_quorum"
+  
+  # Query timeout in seconds
+  timeout_seconds: 10
+  
+  # Maximum retry attempts
+  max_retries: 3
+  
+  # Data retention period in days (TTL)
+  ttl_days: 90
