@@ -1,54 +1,107 @@
----
-name: Go Validator Monitor
-overview: Build a high-performance Ethereum Validator Monitor in Go that polls the Beacon Node API to track validator status, effective balance, attestation duties, and consensus layer rewards using a worker pool pattern with exponential backoff. Persists all data to ScyllaDB with configurable TTL.
-todos:
-  - id: setup-module
-    content: Create go.mod, go.sum with dependencies (zerolog, gocql, x/time/rate, yaml.v3)
-    status: completed
-  - id: config-loader
-    content: Implement YAML config loader with ScyllaDB settings
-    status: completed
-  - id: backoff-util
-    content: Implement exponential backoff utility in pkg/backoff/backoff.go
-    status: completed
-  - id: scylla-client
-    content: Build ScyllaDB client with connection pooling and auto-migration
-    status: completed
-  - id: scylla-schema
-    content: Define ScyllaDB schema for validator data tables
-    status: completed
-  - id: scylla-repository
-    content: Implement repository layer for validator data persistence
-    status: completed
-  - id: beacon-client
-    content: Build HTTP client with rate limiting and connection pooling
-    status: completed
-  - id: beacon-types
-    content: Define Beacon API response structs with MaxEB support
-    status: completed
-  - id: beacon-endpoints
-    content: Implement validators, duties, and rewards API methods
-    status: completed
-  - id: worker-pool
-    content: Create worker pool pattern in internal/monitor/worker.go
-    status: completed
-  - id: scheduler
-    content: Implement slot-based scheduler for epoch-aware polling
-    status: completed
-  - id: monitor-loop
-    content: Build core monitoring orchestration with DB writes
-    status: completed
-  - id: main-entry
-    content: Create main.go with graceful shutdown handling
-    status: completed
-  - id: example-config
-    content: Create example config.yaml file with ScyllaDB settings
-    status: completed
----
+# Pauli - Ethereum Validator Monitor
 
-# Ethereum Validator Monitor in Go
+A high-performance Ethereum validator monitoring service written in Go. Tracks validator status, effective balance, attestation duties, and consensus layer rewards via the Beacon Node API with full persistence to ScyllaDB.
 
-## Architecture Overview
+## Features
+
+- **Real-time Monitoring** - Polls validator status and balances every slot (12 seconds)
+- **MaxEB Support** - Full EIP-7251 compatibility for effective balances up to 2048 ETH
+- **Attestation Tracking** - Monitors duty assignments and reward/penalty breakdowns
+- **ScyllaDB Persistence** - Time-series storage with configurable TTL for all metrics
+- **Worker Pool** - Concurrent monitoring of 100+ validators without rate limit issues
+- **Exponential Backoff** - Graceful handling of 429/503 errors
+- **Structured Logging** - JSON output via zerolog for easy parsing
+
+## Prerequisites
+
+- Go 1.24+
+- ScyllaDB or Cassandra cluster
+- Access to an Ethereum Beacon Node (Lighthouse, Prysm, Teku, etc.)
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/tharun/pauli.git
+cd pauli
+
+# Build
+go build -o validator-monitor .
+```
+
+## Quick Start
+
+1. **Configure ScyllaDB** - Ensure your cluster is running on the configured hosts
+
+2. **Edit config.yaml** - Set your Beacon Node URL and validator indices:
+
+```yaml
+beacon_node_url: "http://localhost:5052"
+validators:
+  - 12345
+  - 67890
+```
+
+3. **Run the monitor**:
+
+```bash
+./validator-monitor -config config.yaml
+```
+
+## Usage
+
+```bash
+# Run with default config
+./validator-monitor -config config.yaml
+
+# Run with debug logging
+./validator-monitor -config config.yaml -debug
+
+# Run in background
+nohup ./validator-monitor -config config.yaml > monitor.log 2>&1 &
+```
+
+## Configuration
+
+```yaml
+# Beacon Node API endpoint
+beacon_node_url: "http://localhost:5052"
+
+# Validator indices to monitor
+validators:
+  - 12345
+  - 67890
+  - 111213
+
+# Polling interval in slots (1 slot = 12 seconds)
+polling_interval_slots: 1
+
+# Concurrent workers
+worker_pool_size: 10
+
+# Rate limiting
+rate_limit:
+  requests_per_second: 50
+  burst: 100
+
+# HTTP client settings
+http:
+  timeout_seconds: 30
+  max_idle_conns: 100
+
+# ScyllaDB connection
+scylladb:
+  hosts:
+    - "127.0.0.1:9042"
+  keyspace: "validator_monitor"
+  replication_factor: 3
+  consistency: "local_quorum"
+  timeout_seconds: 10
+  max_retries: 3
+  ttl_days: 90
+```
+
+## Architecture
 
 ```mermaid
 flowchart TB
@@ -133,15 +186,13 @@ sequenceDiagram
 
 ```
 pauli/
-├── main.go                      # Entry point, graceful shutdown
-├── go.mod
-├── go.sum
-├── config.yaml                  # Example configuration
+├── main.go                      # Entry point with graceful shutdown
+├── config.yaml                  # Configuration file
 ├── internal/
 │   ├── config/
 │   │   └── config.go            # YAML config loader
 │   ├── beacon/
-│   │   ├── client.go            # HTTP client with connection pooling
+│   │   ├── client.go            # HTTP client with rate limiting
 │   │   ├── types.go             # API response structs
 │   │   ├── validators.go        # Validator status endpoint
 │   │   ├── duties.go            # Attestation duties endpoint
@@ -160,81 +211,17 @@ pauli/
         └── backoff.go           # Exponential backoff utility
 ```
 
-## Key Implementation Details
+## Monitoring Logic
 
-### 1. Configuration (YAML)
+| Event | Trigger | Action |
+|-------|---------|--------|
+| Slot Poll | Every N slots | Fetch validator status and balance |
+| Epoch Boundary | First slot of epoch | Fetch attestation duties for next epoch |
+| Epoch Finalized | After finalization | Fetch attestation rewards for completed epoch |
 
-```yaml
-beacon_node_url: "http://localhost:5052"
-validators:
-  - 12345
-  - 67890
-  - 111213
-polling_interval_slots: 1        # Poll every slot (12s)
-worker_pool_size: 10
-rate_limit:
-  requests_per_second: 50
-  burst: 100
-http:
-  timeout_seconds: 30
-  max_idle_conns: 100
+## Log Output
 
-# ScyllaDB Configuration
-scylladb:
-  hosts:
-    - "127.0.0.1:9042"
-  keyspace: "validator_monitor"
-  replication_factor: 3
-  consistency: "local_quorum"    # For sync writes
-  timeout_seconds: 10
-  max_retries: 3
-  ttl_days: 90                   # Configurable data retention
-```
-
-### 2. High-Performance HTTP Client
-
-- Use `net/http` with optimized `Transport` settings:
-                                                                - `MaxIdleConns: 100`
-                                                                - `MaxIdleConnsPerHost: 100`
-                                                                - `IdleConnTimeout: 90s`
-                                                                - HTTP/2 enabled by default
-- Implement token bucket rate limiter using `golang.org/x/time/rate`
-- Pre-allocate buffers for JSON decoding
-
-### 3. Worker Pool Pattern
-
-- Fixed pool of N goroutines (configurable, default 10)
-- Job channel distributes validator indices to workers
-- Result channel collects monitoring results
-- Prevents goroutine explosion when monitoring 100+ validators
-```mermaid
-flowchart LR
-    JobQueue[Job Channel] --> W1[Worker 1]
-    JobQueue --> W2[Worker 2]
-    JobQueue --> W3[Worker N]
-    W1 --> Results[Result Channel]
-    W2 --> Results
-    W3 --> Results
-    Results --> Logger[JSON Logger]
-```
-
-
-### 4. Exponential Backoff
-
-Handle `429` and `503` errors with:
-
-- Initial delay: 100ms
-- Max delay: 30s
-- Multiplier: 2x
-- Jitter: +/- 20%
-
-### 5. Monitor Loop (per epoch/slot)
-
-1. **On each slot**: Fetch validator status and effective balance
-2. **On epoch boundary**: Fetch attestation duties for next epoch
-3. **After epoch finalization**: Fetch attestation rewards for previous epoch
-
-### 6. JSON Log Output Format
+The monitor outputs structured JSON logs:
 
 ```json
 {
@@ -244,39 +231,50 @@ Handle `429` and `503` errors with:
   "validator_index": 12345,
   "status": "active_ongoing",
   "effective_balance_gwei": 64000000000,
-  "duty_success": true,
-  "reward_gwei": 12500
+  "balance_gwei": 64125000000,
+  "msg": "validator_status"
 }
 ```
 
-### 7. MaxEB (EIP-7251) Support
+```json
+{
+  "level": "info",
+  "time": "2026-01-16T10:00:00Z",
+  "epoch": 38580,
+  "validator_index": 12345,
+  "head_reward": 12500,
+  "source_reward": 12500,
+  "target_reward": 12500,
+  "total_reward_gwei": 37500,
+  "duty_success": true,
+  "msg": "attestation_reward"
+}
+```
 
-- Parse `effective_balance` as `uint64` (supports up to 2048 ETH = 2048e9 Gwei)
-- No hardcoded 32 ETH assumptions in balance validation
+## Database Schema
 
-### 8. ScyllaDB Schema
+Four time-series tables optimized for validator queries:
 
-Four tables optimized for time-series queries with partition by validator and clustering by slot/epoch:
+### validator_snapshots
+Per-slot balance and status tracking.
 
-**Table: validator_snapshots** (per-slot balance and status)
-
-```cql
-CREATE TABLE IF NOT EXISTS validator_snapshots (
+```sql
+CREATE TABLE validator_snapshots (
     validator_index BIGINT,
     slot            BIGINT,
     status          TEXT,
-    balance         BIGINT,          -- Actual balance in Gwei
-    effective_balance BIGINT,        -- Effective balance in Gwei (MaxEB aware)
+    balance         BIGINT,
+    effective_balance BIGINT,
     timestamp       TIMESTAMP,
     PRIMARY KEY ((validator_index), slot)
-) WITH CLUSTERING ORDER BY (slot DESC)
-  AND default_time_to_live = 7776000;  -- 90 days, configurable
+) WITH CLUSTERING ORDER BY (slot DESC);
 ```
 
-**Table: attestation_duties** (per-epoch duty assignments)
+### attestation_duties
+Per-epoch duty assignments.
 
-```cql
-CREATE TABLE IF NOT EXISTS attestation_duties (
+```sql
+CREATE TABLE attestation_duties (
     validator_index   BIGINT,
     epoch             BIGINT,
     slot              BIGINT,
@@ -284,99 +282,83 @@ CREATE TABLE IF NOT EXISTS attestation_duties (
     committee_position INT,
     timestamp         TIMESTAMP,
     PRIMARY KEY ((validator_index), epoch, slot)
-) WITH CLUSTERING ORDER BY (epoch DESC, slot DESC)
-  AND default_time_to_live = 7776000;
+) WITH CLUSTERING ORDER BY (epoch DESC, slot DESC);
 ```
 
-**Table: attestation_rewards** (per-epoch rewards breakdown)
+### attestation_rewards
+Per-epoch rewards breakdown (head, source, target).
 
-```cql
-CREATE TABLE IF NOT EXISTS attestation_rewards (
+```sql
+CREATE TABLE attestation_rewards (
     validator_index BIGINT,
     epoch           BIGINT,
-    head_reward     BIGINT,          -- Gwei
-    source_reward   BIGINT,          -- Gwei
-    target_reward   BIGINT,          -- Gwei
-    total_reward    BIGINT,          -- Gwei (head + source + target)
+    head_reward     BIGINT,
+    source_reward   BIGINT,
+    target_reward   BIGINT,
+    total_reward    BIGINT,
     timestamp       TIMESTAMP,
     PRIMARY KEY ((validator_index), epoch)
-) WITH CLUSTERING ORDER BY (epoch DESC)
-  AND default_time_to_live = 7776000;
+) WITH CLUSTERING ORDER BY (epoch DESC);
 ```
 
-**Table: validator_penalties** (slashing and inactivity penalties)
+### validator_penalties
+Slashing and inactivity penalties.
 
-```cql
-CREATE TABLE IF NOT EXISTS validator_penalties (
+```sql
+CREATE TABLE validator_penalties (
     validator_index BIGINT,
     epoch           BIGINT,
     slot            BIGINT,
-    penalty_type    TEXT,            -- 'slashing', 'inactivity_leak', 'attestation_miss'
+    penalty_type    TEXT,
     penalty_gwei    BIGINT,
     timestamp       TIMESTAMP,
     PRIMARY KEY ((validator_index), epoch, slot)
-) WITH CLUSTERING ORDER BY (epoch DESC, slot DESC)
-  AND default_time_to_live = 7776000;
+) WITH CLUSTERING ORDER BY (epoch DESC, slot DESC);
 ```
 
-### 9. ScyllaDB Client Features
+## HTTP Client Features
 
-- **Shard-aware driver**: Uses `github.com/scylladb/gocql` for optimal shard routing
-- **Connection pooling**: Configurable pool size per host
-- **Synchronous writes**: Wait for write confirmation with LOCAL_QUORUM consistency
-- **Auto-migration**: Creates keyspace and tables on startup if missing
-- **Configurable TTL**: Set via config, applied at table level
+- Optimized `net/http` transport with connection pooling
+- HTTP/2 enabled by default
+- Token bucket rate limiter via `golang.org/x/time/rate`
+- Exponential backoff with jitter for 429/503 errors
+
+| Setting | Value |
+|---------|-------|
+| Max Idle Connections | 100 |
+| Idle Connection Timeout | 90s |
+| Initial Backoff | 100ms |
+| Max Backoff | 30s |
+| Backoff Multiplier | 2x |
+| Jitter | ±20% |
+
+## Worker Pool
+
+```mermaid
+flowchart LR
+    JobQueue[Job Channel] --> W1[Worker 1]
+    JobQueue --> W2[Worker 2]
+    JobQueue --> W3[Worker N]
+    W1 --> Results[Result Channel]
+    W2 --> Results
+    W3 --> Results
+    Results --> Logger[JSON Logger]
+    Results --> DB[(ScyllaDB)]
+```
+
+- Fixed pool of N goroutines (configurable)
+- Job channel distributes validator indices to workers
+- Prevents goroutine explosion when monitoring 100+ validators
 
 ## Dependencies
 
 | Package | Purpose |
-
 |---------|---------|
-
+| `github.com/gocql/gocql` | ScyllaDB/Cassandra driver |
 | `github.com/rs/zerolog` | High-performance JSON logging |
-
-| `github.com/scylladb/gocql` | ScyllaDB driver with shard-aware routing |
-
 | `golang.org/x/time/rate` | Token bucket rate limiter |
+| `gopkg.in/yaml.v3` | YAML configuration parsing |
 
-| `gopkg.in/yaml.v3` | YAML config parsing |
+## License
 
-## Files to Create
-
-| File | Description |
-
-|------|-------------|
-
-| [`main.go`](main.go) | Entry point with signal handling and graceful shutdown |
-
-| [`go.mod`](go.mod) | Go module definition with dependencies |
-
-| [`config.yaml`](config.yaml) | Example configuration file with ScyllaDB settings |
-
-| [`internal/config/config.go`](internal/config/config.go) | YAML configuration loader |
-
-| [`internal/beacon/client.go`](internal/beacon/client.go) | HTTP client with rate limiting and backoff |
-
-| [`internal/beacon/types.go`](internal/beacon/types.go) | Beacon API response types |
-
-| [`internal/beacon/validators.go`](internal/beacon/validators.go) | Validator status fetching |
-
-| [`internal/beacon/duties.go`](internal/beacon/duties.go) | Attestation duties fetching |
-
-| [`internal/beacon/rewards.go`](internal/beacon/rewards.go) | Attestation rewards fetching |
-
-| [`internal/storage/scylla.go`](internal/storage/scylla.go) | ScyllaDB client and connection management |
-
-| [`internal/storage/migrations.go`](internal/storage/migrations.go) | Schema auto-migration logic |
-
-| [`internal/storage/models.go`](internal/storage/models.go) | Database models for all tables |
-
-| [`internal/storage/repository.go`](internal/storage/repository.go) | Data access layer with CRUD operations |
-
-| [`internal/monitor/monitor.go`](internal/monitor/monitor.go) | Core monitoring orchestration |
-
-| [`internal/monitor/worker.go`](internal/monitor/worker.go) | Worker pool implementation |
-
-| [`internal/monitor/scheduler.go`](internal/monitor/scheduler.go) | Slot-based task scheduling |
-
-| [`pkg/backoff/backoff.go`](pkg/backoff/backoff.go) | Exponential backoff with jitter |
+MIT
