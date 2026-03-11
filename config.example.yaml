@@ -1,0 +1,200 @@
+# =============================================================================
+# Pauli - Ethereum Validator Monitor
+# Sample Configuration File
+# =============================================================================
+# Copy this file to config.yaml and customize for your environment.
+# All durations are in seconds unless otherwise noted.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# BEACON NODE
+# -----------------------------------------------------------------------------
+# URL of your Beacon Node's REST API
+# Common ports: Lighthouse (5052), Prysm (3500), Teku (5051), Nimbus (5052)
+# For providers like Tatum: "https://ethereum-mainnet.gateway.tatum.io"
+beacon_node_url: "http://localhost:5052"
+
+# Optional: API key for providers that require authentication (e.g., Tatum)
+# Leave empty if not needed
+beacon_api_key: ""
+
+# -----------------------------------------------------------------------------
+# VALIDATORS
+# -----------------------------------------------------------------------------
+# List of validator indices to monitor
+# Find your validator index at: https://beaconcha.in/
+validators:
+  - 123456    # Example: Your first validator
+  - 234567    # Example: Your second validator
+  # Add more validators as needed...
+  # - 345678
+  # - 456789
+
+# -----------------------------------------------------------------------------
+# POLLING
+# -----------------------------------------------------------------------------
+# How often to poll validator status (in slots)
+# 1 slot = 12 seconds on mainnet
+# Recommended: 1 for real-time, 32 for epoch-level granularity
+polling_interval_slots: 1
+
+# -----------------------------------------------------------------------------
+# WORKER POOL
+# -----------------------------------------------------------------------------
+# Number of concurrent workers for API requests
+# Recommended: 10 for <100 validators, 20-50 for 100+ validators
+# Higher values = faster polling, but more load on beacon node
+worker_pool_size: 10
+
+# -----------------------------------------------------------------------------
+# RATE LIMITING
+# -----------------------------------------------------------------------------
+# Prevents overwhelming the beacon node with requests
+rate_limit:
+  # Maximum requests per second (token bucket rate)
+  # 1 request per slot = 1 request per 12 seconds = 0.083 req/s
+  # Tatum API: 3 requests/second (allows up to 36 requests per slot if needed)
+  # Public nodes: Usually 50-100 requests/second
+  # Self-hosted: Can be much higher
+  requests_per_second: 0.083  # Conservative: 1 request per slot
+  
+  # Maximum burst size (token bucket capacity)
+  # Allows short bursts above the rate limit
+  # For 1 request per slot: burst = 1 (no burst, strict 1 req/slot)
+  # For more lenient limits, can be 2-3x the requests_per_second
+  burst: 1
+
+# -----------------------------------------------------------------------------
+# HTTP CLIENT
+# -----------------------------------------------------------------------------
+http:
+  # Request timeout in seconds
+  # Increase if beacon node is slow or remote
+  timeout_seconds: 30
+  
+  # Maximum idle connections to keep open
+  # Higher values improve performance for many validators
+  max_idle_conns: 100
+
+# -----------------------------------------------------------------------------
+# DATABASE
+# -----------------------------------------------------------------------------
+# Select which database backend to use:
+#   - "scylladb" (default)
+#   - "postgres"
+database_driver: "scylladb"
+
+# SCYLLADB / CASSANDRA
+scylladb:
+  # Cluster contact points (host:port)
+  # For multi-node clusters, list multiple hosts for failover
+  hosts:
+    - "127.0.0.1:9042"
+    # - "10.0.0.2:9042"
+    # - "10.0.0.3:9042"
+  
+  # Keyspace name (created automatically if missing)
+  keyspace: "validator_monitor"
+  
+  # Replication factor for keyspace creation
+  # Production: Match your cluster size (typically 3)
+  # Development: Use 1 for single-node clusters
+  replication_factor: 3
+  
+  # Write consistency level
+  # Options: any, one, two, three, quorum, all, local_quorum, each_quorum, local_one
+  # Production: local_quorum (recommended)
+  # Development: one (faster, less durable)
+  consistency: "local_quorum"
+  
+  # Query timeout in seconds
+  timeout_seconds: 10
+  
+  # Maximum retry attempts for failed queries
+  max_retries: 3
+  
+  # Data retention period in days
+  # Data older than this is automatically deleted via TTL
+  # 90 days ≈ 3 months of history
+  ttl_days: 90
+
+# POSTGRES
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "pauli"
+  password: "pauli"
+  database: "validator_monitor"
+  ssl_mode: "disable"
+  max_conns: 10
+  ttl_days: 90
+
+
+# =============================================================================
+# ENVIRONMENT-SPECIFIC EXAMPLES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# DEVELOPMENT / LOCAL TESTING
+# -----------------------------------------------------------------------------
+# Uncomment and modify for local development:
+#
+# beacon_node_url: "http://localhost:5052"
+# validators: [1, 2, 3]
+# polling_interval_slots: 32  # Once per epoch
+# worker_pool_size: 2
+# rate_limit:
+#   requests_per_second: 10
+#   burst: 20
+# scylladb:
+#   hosts: ["127.0.0.1:9042"]
+#   keyspace: "validator_monitor_dev"
+#   replication_factor: 1
+#   consistency: "one"
+#   ttl_days: 7
+
+# -----------------------------------------------------------------------------
+# PRODUCTION / HIGH AVAILABILITY
+# -----------------------------------------------------------------------------
+# Uncomment and modify for production:
+#
+# beacon_node_url: "http://beacon-node.internal:5052"
+# validators:
+#   - 100000
+#   - 100001
+#   # ... (your production validators)
+# polling_interval_slots: 1
+# worker_pool_size: 50
+# rate_limit:
+#   requests_per_second: 100
+#   burst: 200
+# http:
+#   timeout_seconds: 60
+#   max_idle_conns: 200
+# scylladb:
+#   hosts:
+#     - "scylla-1.internal:9042"
+#     - "scylla-2.internal:9042"
+#     - "scylla-3.internal:9042"
+#   keyspace: "validator_monitor_prod"
+#   replication_factor: 3
+#   consistency: "local_quorum"
+#   timeout_seconds: 15
+#   max_retries: 5
+#   ttl_days: 365  # 1 year retention
+
+# -----------------------------------------------------------------------------
+# TESTNET (Holesky/Sepolia)
+# -----------------------------------------------------------------------------
+# Uncomment and modify for testnet monitoring:
+#
+# beacon_node_url: "http://holesky-beacon:5052"
+# validators: [12345, 67890]
+# polling_interval_slots: 1
+# worker_pool_size: 5
+# scylladb:
+#   hosts: ["127.0.0.1:9042"]
+#   keyspace: "validator_monitor_holesky"
+#   replication_factor: 1
+#   consistency: "one"
+#   ttl_days: 30

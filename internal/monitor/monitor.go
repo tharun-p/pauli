@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -15,16 +16,28 @@ import (
 type Monitor struct {
 	cfg        *config.Config
 	client     *beacon.Client
-	repo       *storage.Repository
+	repo       storage.Repository
 	scheduler  *Scheduler
 	workerPool *WorkerPool
 	logger     zerolog.Logger
 	wg         sync.WaitGroup
+
+	// Cached head slot to avoid redundant API calls
+	headSlotCache struct {
+		slot      uint64
+		timestamp time.Time
+		mu        sync.RWMutex
+	}
+
+	// Reconciliation cursors (in-memory) to avoid skipping work
+	lastSnapshotSlot uint64
+	lastDutiesEpoch  uint64
+	lastRewardsEpoch uint64
 }
 
 // NewMonitor creates a new Monitor instance.
-func NewMonitor(cfg *config.Config, client *beacon.Client, repo *storage.Repository, logger zerolog.Logger) *Monitor {
-	scheduler := NewScheduler(client, cfg.Validators, cfg.PollingIntervalSlots, logger)
+func NewMonitor(cfg *config.Config, client *beacon.Client, repo storage.Repository, logger zerolog.Logger) *Monitor {
+	scheduler := NewScheduler(client, cfg.Validators, cfg.PollingIntervalSlots, cfg.SlotDuration(), logger)
 
 	m := &Monitor{
 		cfg:       cfg,
@@ -55,6 +68,22 @@ func (m *Monitor) Start(ctx context.Context) error {
 		m.logger.Warn().Msg("Beacon node is still syncing, results may be incomplete")
 	}
 
+	// Initialize reconciliation cursors from current chain state so we start
+	// from "now" and then move forward without skipping.
+	if headSlot, err := m.getCachedHeadSlot(ctx); err != nil {
+		m.logger.Warn().Err(err).Msg("Failed to get initial head slot for cursors")
+	} else {
+		m.lastSnapshotSlot = headSlot
+		currentEpoch := headSlot / config.SlotsPerEpoch()
+		m.lastDutiesEpoch = currentEpoch
+
+		if checkpoints, err := m.client.GetFinalityCheckpoints(ctx, "head"); err != nil {
+			m.logger.Warn().Err(err).Msg("Failed to get initial finalized epoch for rewards cursor")
+		} else {
+			m.lastRewardsEpoch = checkpoints.Finalized.Epoch.Uint64()
+		}
+	}
+
 	// Start worker pool
 	m.workerPool.Start(ctx)
 
@@ -78,28 +107,119 @@ func (m *Monitor) Start(ctx context.Context) error {
 func (m *Monitor) runLoop(ctx context.Context) {
 	defer m.wg.Done()
 
+	m.logger.Info().Msg("Monitor loop started")
+
 	for {
-		// Wait for next slot interval
-		slot, err := m.scheduler.WaitForSlotInterval(ctx)
+		// Wait for next interval to pace work
+		_, err := m.scheduler.WaitForSlotInterval(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
+				m.logger.Info().Msg("Monitor loop shutting down")
 				return
 			}
 			m.logger.Error().Err(err).Msg("Failed to wait for slot")
 			continue
 		}
 
-		// Get scheduled events
-		events, err := m.scheduler.NextEvents(ctx, slot)
+		// Get current head slot from beacon (or cache)
+		headSlot, err := m.getCachedHeadSlot(ctx)
 		if err != nil {
-			m.logger.Error().Err(err).Msg("Failed to get scheduled events")
+			m.logger.Error().Err(err).Msg("Failed to get head slot")
 			continue
 		}
 
-		// Process each event
-		for _, event := range events {
-			m.processEvent(ctx, event)
+		currentEpoch := headSlot / config.SlotsPerEpoch()
+		m.logger.Info().
+			Uint64("slot", headSlot).
+			Uint64("epoch", currentEpoch).
+			Msg("Reconciling up to head slot")
+
+		// Reconcile snapshots, duties, and rewards from last processed positions
+		m.reconcileSnapshots(ctx, headSlot)
+		m.reconcileEpochData(ctx, headSlot)
+	}
+}
+
+// reconcileSnapshots ensures we process every slot from lastSnapshotSlot+1 up to headSlot,
+// bounded per loop to respect rate limits.
+func (m *Monitor) reconcileSnapshots(ctx context.Context, headSlot uint64) {
+	const maxSlotsPerLoop = 32
+
+	start := m.lastSnapshotSlot + 1
+	if start > headSlot {
+		return
+	}
+
+	slotsProcessed := 0
+	for slot := start; slot <= headSlot && slotsProcessed < maxSlotsPerLoop; slot++ {
+		event := ScheduleEvent{
+			Slot:       slot,
+			Epoch:      slot / config.SlotsPerEpoch(),
+			Type:       EventTypeSlotPoll,
+			Validators: m.cfg.Validators,
 		}
+		m.logger.Debug().
+			Uint64("slot", slot).
+			Int("validators_count", len(event.Validators)).
+			Msg("Reconciling validator snapshots for slot")
+
+		m.pollValidators(ctx, event)
+		m.lastSnapshotSlot = slot
+		slotsProcessed++
+	}
+}
+
+// reconcileEpochData ensures we process every epoch for duties and rewards from the last
+// seen cursors up to the current chain state, bounded per loop.
+func (m *Monitor) reconcileEpochData(ctx context.Context, headSlot uint64) {
+	currentEpoch := headSlot / config.SlotsPerEpoch()
+
+	checkpoints, err := m.client.GetFinalityCheckpoints(ctx, "head")
+	if err != nil {
+		m.logger.Warn().Err(err).Msg("Failed to get finality checkpoints during reconciliation")
+		return
+	}
+	finalizedEpoch := checkpoints.Finalized.Epoch.Uint64()
+
+	const maxEpochsPerLoop = 8
+
+	// Reconcile duties for upcoming epochs (current and next)
+	dutiesTargetEpoch := currentEpoch + 1
+	dutiesProcessed := 0
+	for epoch := m.lastDutiesEpoch + 1; epoch <= dutiesTargetEpoch && dutiesProcessed < maxEpochsPerLoop; epoch++ {
+		event := ScheduleEvent{
+			Slot:       EpochStartSlot(epoch),
+			Epoch:      epoch,
+			Type:       EventTypeEpochBoundary,
+			Validators: m.cfg.Validators,
+		}
+		m.logger.Debug().
+			Uint64("epoch", epoch).
+			Int("validators_count", len(event.Validators)).
+			Msg("Reconciling attestation duties for epoch")
+
+		m.fetchDuties(ctx, event)
+		m.lastDutiesEpoch = epoch
+		dutiesProcessed++
+	}
+
+	// Reconcile rewards for finalized epochs
+	rewardsProcessed := 0
+	for epoch := m.lastRewardsEpoch + 1; epoch <= finalizedEpoch && rewardsProcessed < maxEpochsPerLoop; epoch++ {
+		event := ScheduleEvent{
+			Slot:       EpochStartSlot(epoch),
+			Epoch:      epoch,
+			Type:       EventTypeEpochFinalized,
+			Validators: m.cfg.Validators,
+		}
+		m.logger.Debug().
+			Uint64("epoch", epoch).
+			Int("validators_count", len(event.Validators)).
+			Msg("Reconciling attestation rewards for epoch")
+
+		m.fetchRewards(ctx, event)
+		m.lastRewardsEpoch = epoch
+		rewardsProcessed++
 	}
 }
 
@@ -117,6 +237,12 @@ func (m *Monitor) processEvent(ctx context.Context, event ScheduleEvent) {
 
 // pollValidators submits jobs to poll validator status.
 func (m *Monitor) pollValidators(ctx context.Context, event ScheduleEvent) {
+	m.logger.Info().
+		Uint64("slot", event.Slot).
+		Uint64("epoch", event.Epoch).
+		Int("validators_count", len(event.Validators)).
+		Msg("Polling validators")
+
 	for _, validatorIndex := range event.Validators {
 		job := Job{
 			ValidatorIndex: validatorIndex,
@@ -124,6 +250,11 @@ func (m *Monitor) pollValidators(ctx context.Context, event ScheduleEvent) {
 			Epoch:          event.Epoch,
 			Type:           JobTypeStatus,
 		}
+
+		m.logger.Debug().
+			Uint64("validator_index", validatorIndex).
+			Uint64("slot", event.Slot).
+			Msg("Submitting validator status job")
 
 		select {
 		case <-ctx.Done():
@@ -136,6 +267,12 @@ func (m *Monitor) pollValidators(ctx context.Context, event ScheduleEvent) {
 
 // fetchDuties submits jobs to fetch attestation duties.
 func (m *Monitor) fetchDuties(ctx context.Context, event ScheduleEvent) {
+	m.logger.Info().
+		Uint64("slot", event.Slot).
+		Uint64("epoch", event.Epoch).
+		Int("validators_count", len(event.Validators)).
+		Msg("Fetching attestation duties for epoch")
+
 	// Fetch duties for all validators at once (more efficient)
 	job := Job{
 		ValidatorIndex: 0, // Not used for duties
@@ -143,6 +280,11 @@ func (m *Monitor) fetchDuties(ctx context.Context, event ScheduleEvent) {
 		Epoch:          event.Epoch,
 		Type:           JobTypeDuties,
 	}
+
+	m.logger.Debug().
+		Uint64("epoch", event.Epoch).
+		Uint64("slot", event.Slot).
+		Msg("Submitting attestation duties job")
 
 	select {
 	case <-ctx.Done():
@@ -154,6 +296,12 @@ func (m *Monitor) fetchDuties(ctx context.Context, event ScheduleEvent) {
 
 // fetchRewards submits jobs to fetch attestation rewards.
 func (m *Monitor) fetchRewards(ctx context.Context, event ScheduleEvent) {
+	m.logger.Info().
+		Uint64("slot", event.Slot).
+		Uint64("epoch", event.Epoch).
+		Int("validators_count", len(event.Validators)).
+		Msg("Fetching attestation rewards for finalized epoch")
+
 	// Fetch rewards for all validators at once
 	job := Job{
 		ValidatorIndex: 0, // Not used for rewards
@@ -184,38 +332,151 @@ func (m *Monitor) Process(ctx context.Context, job Job) (interface{}, error) {
 	}
 }
 
+// getCachedHeadSlot gets the head slot, using cache if recent (< 6 seconds old).
+func (m *Monitor) getCachedHeadSlot(ctx context.Context) (uint64, error) {
+	m.headSlotCache.mu.RLock()
+	cached := m.headSlotCache.slot
+	cacheTime := m.headSlotCache.timestamp
+	m.headSlotCache.mu.RUnlock()
+
+	// Use cache if less than 6 seconds old (half a slot)
+	if cached > 0 && time.Since(cacheTime) < 6*time.Second {
+		return cached, nil
+	}
+
+	// Fetch fresh slot
+	slot, err := m.client.GetHeadSlot(ctx)
+	if err != nil {
+		// Return cached value if available, even if stale
+		if cached > 0 {
+			m.logger.Warn().Err(err).Uint64("cached_slot", cached).Msg("Using cached slot due to API error")
+			return cached, nil
+		}
+		return 0, err
+	}
+
+	// Update cache
+	m.headSlotCache.mu.Lock()
+	m.headSlotCache.slot = slot
+	m.headSlotCache.timestamp = time.Now()
+	m.headSlotCache.mu.Unlock()
+
+	return slot, nil
+}
+
 // processStatusJob fetches and stores validator status.
 func (m *Monitor) processStatusJob(ctx context.Context, job Job) (*storage.ValidatorSnapshot, error) {
+	// Use cached head slot to avoid redundant API calls
+	currentSlot, err := m.getCachedHeadSlot(ctx)
+	if err != nil {
+		m.logger.Warn().Err(err).Uint64("job_slot", job.Slot).Msg("Failed to get current slot, using job slot")
+		currentSlot = job.Slot
+	}
+
+	m.logger.Debug().
+		Uint64("validator_index", job.ValidatorIndex).
+		Uint64("job_slot", job.Slot).
+		Uint64("current_slot", currentSlot).
+		Msg("Fetching validator status from beacon API")
+
 	validator, err := m.client.GetValidator(ctx, "head", job.ValidatorIndex)
 	if err != nil {
-		return nil, err
+		m.logger.Error().
+			Err(err).
+			Uint64("validator_index", job.ValidatorIndex).
+			Uint64("slot", job.Slot).
+			Msg("Failed to fetch validator from beacon API")
+		return nil, fmt.Errorf("failed to fetch validator %d: %w", job.ValidatorIndex, err)
+	}
+
+	m.logger.Debug().
+		Uint64("validator_index", job.ValidatorIndex).
+		Str("status", validator.Status).
+		Uint64("balance", validator.Balance.Uint64()).
+		Uint64("effective_balance", validator.Validator.EffectiveBalance.Uint64()).
+		Msg("Successfully fetched validator data from beacon API")
+
+	// Use job slot if it's close to current slot (within 2 slots), otherwise use current slot
+	// This prevents missing slots when there's a small delay
+	finalSlot := currentSlot
+	if job.Slot > 0 && (currentSlot == 0 || (currentSlot >= job.Slot && currentSlot-job.Slot <= 2)) {
+		finalSlot = job.Slot
+	} else if currentSlot > 0 {
+		finalSlot = currentSlot
+	} else {
+		finalSlot = job.Slot
 	}
 
 	snapshot := &storage.ValidatorSnapshot{
 		ValidatorIndex:   job.ValidatorIndex,
-		Slot:             job.Slot,
+		Slot:             finalSlot,
 		Status:           validator.Status,
 		Balance:          validator.Balance.Uint64(),
 		EffectiveBalance: validator.Validator.EffectiveBalance.Uint64(),
 		Timestamp:        time.Now().UTC(),
 	}
 
+	m.logger.Info().
+		Uint64("validator_index", snapshot.ValidatorIndex).
+		Uint64("slot", snapshot.Slot).
+		Str("status", snapshot.Status).
+		Uint64("balance_gwei", snapshot.Balance).
+		Uint64("effective_balance_gwei", snapshot.EffectiveBalance).
+		Msg("Prepared snapshot for database")
+
 	// Save to database
+	m.logger.Debug().
+		Uint64("validator_index", snapshot.ValidatorIndex).
+		Uint64("slot", snapshot.Slot).
+		Msg("Attempting to save validator snapshot to database")
+
 	if err := m.repo.SaveValidatorSnapshot(ctx, snapshot); err != nil {
 		m.logger.Error().
 			Err(err).
 			Uint64("validator_index", job.ValidatorIndex).
+			Uint64("slot", snapshot.Slot).
+			Uint64("balance", snapshot.Balance).
+			Uint64("effective_balance", snapshot.EffectiveBalance).
 			Msg("Failed to save validator snapshot")
+		return nil, fmt.Errorf("failed to save snapshot: %w", err)
 	}
+
+	m.logger.Info().
+		Uint64("validator_index", snapshot.ValidatorIndex).
+		Uint64("slot", snapshot.Slot).
+		Uint64("balance", snapshot.Balance).
+		Uint64("effective_balance", snapshot.EffectiveBalance).
+		Msg("Successfully saved validator snapshot to database")
 
 	return snapshot, nil
 }
 
 // processDutiesJob fetches and stores attestation duties.
 func (m *Monitor) processDutiesJob(ctx context.Context, job Job) ([]*storage.AttestationDuty, error) {
+	m.logger.Debug().
+		Uint64("epoch", job.Epoch).
+		Int("validators_count", len(m.cfg.Validators)).
+		Msg("Fetching attestation duties from beacon API")
+
 	resp, err := m.client.GetAttesterDuties(ctx, job.Epoch, m.cfg.Validators)
 	if err != nil {
-		return nil, err
+		m.logger.Error().
+			Err(err).
+			Uint64("epoch", job.Epoch).
+			Msg("Failed to fetch attestation duties from beacon API")
+		return nil, fmt.Errorf("failed to fetch duties for epoch %d: %w", job.Epoch, err)
+	}
+
+	m.logger.Debug().
+		Uint64("epoch", job.Epoch).
+		Int("duties_count", len(resp.Data)).
+		Msg("Successfully fetched attestation duties from beacon API")
+
+	if len(resp.Data) == 0 {
+		m.logger.Warn().
+			Uint64("epoch", job.Epoch).
+			Msg("No duties returned for epoch")
+		return []*storage.AttestationDuty{}, nil
 	}
 
 	duties := make([]*storage.AttestationDuty, 0, len(resp.Data))
@@ -231,13 +492,30 @@ func (m *Monitor) processDutiesJob(ctx context.Context, job Job) ([]*storage.Att
 		duties = append(duties, duty)
 	}
 
+	m.logger.Info().
+		Uint64("epoch", job.Epoch).
+		Int("duties_count", len(duties)).
+		Msg("Prepared duties for database")
+
 	// Save to database
+	m.logger.Debug().
+		Uint64("epoch", job.Epoch).
+		Int("duties_count", len(duties)).
+		Msg("Attempting to save attestation duties to database")
+
 	if err := m.repo.SaveAttestationDuties(ctx, duties); err != nil {
 		m.logger.Error().
 			Err(err).
 			Uint64("epoch", job.Epoch).
+			Int("duties_count", len(duties)).
 			Msg("Failed to save attestation duties")
+		return nil, fmt.Errorf("failed to save duties: %w", err)
 	}
+
+	m.logger.Info().
+		Uint64("epoch", job.Epoch).
+		Int("duties_count", len(duties)).
+		Msg("Successfully saved attestation duties to database")
 
 	return duties, nil
 }
@@ -285,8 +563,15 @@ func (m *Monitor) processRewardsJob(ctx context.Context, job Job) ([]*storage.At
 		m.logger.Error().
 			Err(err).
 			Uint64("epoch", job.Epoch).
+			Int("rewards_count", len(rewards)).
 			Msg("Failed to save attestation rewards")
+		return nil, fmt.Errorf("failed to save rewards: %w", err)
 	}
+
+	m.logger.Info().
+		Uint64("epoch", job.Epoch).
+		Int("rewards_count", len(rewards)).
+		Msg("Successfully saved attestation rewards to database")
 
 	// Save penalties to database
 	for _, penalty := range penalties {

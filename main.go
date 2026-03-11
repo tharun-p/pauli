@@ -13,7 +13,7 @@ import (
 	"github.com/tharun/pauli/internal/beacon"
 	"github.com/tharun/pauli/internal/config"
 	"github.com/tharun/pauli/internal/monitor"
-	"github.com/tharun/pauli/internal/storage"
+	"github.com/tharun/pauli/internal/store"
 )
 
 func main() {
@@ -47,22 +47,39 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Initialize ScyllaDB client
-	log.Info().Strs("hosts", cfg.ScyllaDB.Hosts).Str("keyspace", cfg.ScyllaDB.Keyspace).Msg("Connecting to ScyllaDB")
-
-	scyllaClient, err := storage.NewClient(&cfg.ScyllaDB)
+	// Initialize database store based on configuration
+	dbStore, err := store.NewStore(cfg)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to ScyllaDB")
+		log.Fatal().Err(err).Msg("Failed to initialize database store")
 	}
-	defer scyllaClient.Close()
+	defer dbStore.Close()
 
 	// Run migrations
-	if err := scyllaClient.RunMigrations(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to run ScyllaDB migrations")
+	if err := dbStore.RunMigrations(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to run database migrations")
 	}
 
+	// Test database connection
+	if err := dbStore.HealthCheck(); err != nil {
+		log.Fatal().Err(err).Msg("Database health check failed")
+	}
+	log.Info().Str("driver", cfg.DatabaseDriver).Msg("Database connection verified")
+
 	// Create repository
-	repo := storage.NewRepository(scyllaClient)
+	repo := dbStore.Repository()
+
+	// Test read capability
+	testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if len(cfg.Validators) > 0 {
+		count, err := repo.CountSnapshots(testCtx, cfg.Validators[0])
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to query existing snapshots (this is OK if tables are empty)")
+		} else {
+			log.Info().Uint64("validator_index", cfg.Validators[0]).Int("existing_snapshots", count).Msg("Found existing snapshots")
+		}
+	}
 
 	// Create Beacon API client
 	beaconClient := beacon.NewClient(cfg)
@@ -76,6 +93,27 @@ func main() {
 		log.Info().Msg("Beacon node is fully synced")
 	} else {
 		log.Warn().Msg("Beacon node is still syncing")
+	}
+
+	// Test fetching a validator to verify API works
+	if len(cfg.Validators) > 0 {
+		testValidator := cfg.Validators[0]
+		log.Info().Uint64("validator_index", testValidator).Msg("Testing validator API fetch")
+
+		testCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		validator, err := beaconClient.GetValidator(testCtx, "head", testValidator)
+		if err != nil {
+			log.Error().Err(err).Uint64("validator_index", testValidator).Msg("Failed to fetch test validator - check beacon node URL and validator index")
+		} else {
+			log.Info().
+				Uint64("validator_index", testValidator).
+				Str("status", validator.Status).
+				Uint64("balance_gwei", validator.Balance.Uint64()).
+				Uint64("effective_balance_gwei", validator.Validator.EffectiveBalance.Uint64()).
+				Msg("Successfully fetched test validator from beacon API")
+		}
 	}
 
 	// Create and start monitor

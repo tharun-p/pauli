@@ -1,0 +1,32 @@
+beacon_node_url: "https://ethereum-mainnet.gateway.tatum.io"
+# IMPORTANT: replace with your own API key locally; this placeholder is non-functional.
+beacon_api_key: "YOUR_TATUM_API_KEY_HERE"
+validators: [1935560]
+polling_interval_slots: 1
+worker_pool_size: 2
+rate_limit:
+  requests_per_second: 3  # Tatum API limit: 3 requests per second
+  burst: 3                # Allow small bursts within the limit
+
+# Use ScyllaDB by default in development
+database_driver: "scylladb"
+
+scylladb:
+  hosts: ["127.0.0.1:9042"]
+  keyspace: "validator_monitor_dev"
+  replication_factor: 1
+  consistency: "one"
+  timeout_seconds: 10
+  max_retries: 3
+  ttl_days: 7
+
+# Example Postgres configuration (optional, for switching driver)
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "pauli"
+  password: "pauli"
+  database: "validator_monitor_dev"
+  ssl_mode: "disable"
+  max_conns: 10
+  ttl_days: 30

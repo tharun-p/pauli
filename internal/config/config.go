@@ -10,13 +10,19 @@ import (
 
 // Config represents the application configuration.
 type Config struct {
-	BeaconNodeURL        string        `yaml:"beacon_node_url"`
-	Validators           []uint64      `yaml:"validators"`
-	PollingIntervalSlots int           `yaml:"polling_interval_slots"`
-	WorkerPoolSize       int           `yaml:"worker_pool_size"`
-	RateLimit            RateLimitConf `yaml:"rate_limit"`
-	HTTP                 HTTPConf      `yaml:"http"`
-	ScyllaDB             ScyllaDBConf  `yaml:"scylladb"`
+	BeaconNodeURL        string   `yaml:"beacon_node_url"`
+	BeaconAPIKey         string   `yaml:"beacon_api_key,omitempty"` // Optional API key for providers like Tatum
+	Validators           []uint64 `yaml:"validators"`
+	PollingIntervalSlots int      `yaml:"polling_interval_slots"`
+	// SlotDurationSeconds allows overriding the default 12s slot duration.
+	// For local devnets (e.g. kurtosis) you can set this to 2.
+	SlotDurationSeconds int           `yaml:"slot_duration_seconds,omitempty"`
+	WorkerPoolSize      int           `yaml:"worker_pool_size"`
+	RateLimit           RateLimitConf `yaml:"rate_limit"`
+	HTTP                HTTPConf      `yaml:"http"`
+	DatabaseDriver      string        `yaml:"database_driver"` // "scylladb" or "postgres"
+	ScyllaDB            ScyllaDBConf  `yaml:"scylladb"`
+	Postgres            PostgresConf  `yaml:"postgres"`
 }
 
 // RateLimitConf configures the rate limiter.
@@ -42,6 +48,18 @@ type ScyllaDBConf struct {
 	TTLDays           int      `yaml:"ttl_days"`
 }
 
+// PostgresConf configures PostgreSQL connection.
+type PostgresConf struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
+	SSLMode  string `yaml:"ssl_mode"`
+	MaxConns int32  `yaml:"max_conns"`
+	TTLDays  int    `yaml:"ttl_days"`
+}
+
 // Timeout returns the HTTP timeout as a time.Duration.
 func (h *HTTPConf) Timeout() time.Duration {
 	return time.Duration(h.TimeoutSeconds) * time.Second
@@ -57,9 +75,14 @@ func (s *ScyllaDBConf) TTLSeconds() int {
 	return s.TTLDays * 24 * 60 * 60
 }
 
-// SlotDuration returns the Ethereum slot duration (12 seconds).
-func SlotDuration() time.Duration {
-	return 12 * time.Second
+// SlotDuration returns the effective slot duration.
+// Defaults to 12 seconds (mainnet), but can be overridden via config.
+func (c *Config) SlotDuration() time.Duration {
+	seconds := c.SlotDurationSeconds
+	if seconds <= 0 {
+		seconds = 12
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // SlotsPerEpoch returns the number of slots per epoch (32).
@@ -96,11 +119,30 @@ func (c *Config) validate() error {
 	if len(c.Validators) == 0 {
 		return fmt.Errorf("at least one validator index is required")
 	}
-	if len(c.ScyllaDB.Hosts) == 0 {
-		return fmt.Errorf("at least one scylladb host is required")
-	}
-	if c.ScyllaDB.Keyspace == "" {
-		return fmt.Errorf("scylladb keyspace is required")
+	// Database configuration validation based on selected driver.
+	switch c.DatabaseDriver {
+	case "", "scylladb":
+		if len(c.ScyllaDB.Hosts) == 0 {
+			return fmt.Errorf("at least one scylladb host is required")
+		}
+		if c.ScyllaDB.Keyspace == "" {
+			return fmt.Errorf("scylladb keyspace is required")
+		}
+	case "postgres":
+		if c.Postgres.Host == "" {
+			return fmt.Errorf("postgres host is required")
+		}
+		if c.Postgres.Port == 0 {
+			return fmt.Errorf("postgres port is required")
+		}
+		if c.Postgres.User == "" {
+			return fmt.Errorf("postgres user is required")
+		}
+		if c.Postgres.Database == "" {
+			return fmt.Errorf("postgres database is required")
+		}
+	default:
+		return fmt.Errorf("unsupported database_driver: %s", c.DatabaseDriver)
 	}
 	return nil
 }
@@ -125,6 +167,9 @@ func (c *Config) setDefaults() {
 	if c.HTTP.MaxIdleConns <= 0 {
 		c.HTTP.MaxIdleConns = 100
 	}
+	if c.DatabaseDriver == "" {
+		c.DatabaseDriver = "scylladb"
+	}
 	if c.ScyllaDB.ReplicationFactor <= 0 {
 		c.ScyllaDB.ReplicationFactor = 3
 	}
@@ -139,5 +184,17 @@ func (c *Config) setDefaults() {
 	}
 	if c.ScyllaDB.TTLDays <= 0 {
 		c.ScyllaDB.TTLDays = 90
+	}
+	if c.Postgres.Port == 0 {
+		c.Postgres.Port = 5432
+	}
+	if c.Postgres.SSLMode == "" {
+		c.Postgres.SSLMode = "disable"
+	}
+	if c.Postgres.MaxConns <= 0 {
+		c.Postgres.MaxConns = 10
+	}
+	if c.Postgres.TTLDays <= 0 {
+		c.Postgres.TTLDays = 90
 	}
 }

@@ -22,6 +22,7 @@ type Scheduler struct {
 	client         *beacon.Client
 	validators     []uint64
 	intervalSlots  int
+	slotDuration   time.Duration
 	logger         zerolog.Logger
 	genesisTime    time.Time
 	lastEpoch      uint64
@@ -29,11 +30,13 @@ type Scheduler struct {
 }
 
 // NewScheduler creates a new Scheduler.
-func NewScheduler(client *beacon.Client, validators []uint64, intervalSlots int, logger zerolog.Logger) *Scheduler {
+// slotDuration controls how long a slot is (e.g. 12s on mainnet, 2s on some devnets).
+func NewScheduler(client *beacon.Client, validators []uint64, intervalSlots int, slotDuration time.Duration, logger zerolog.Logger) *Scheduler {
 	return &Scheduler{
 		client:        client,
 		validators:    validators,
 		intervalSlots: intervalSlots,
+		slotDuration:  slotDuration,
 		logger:        logger,
 	}
 }
@@ -46,6 +49,18 @@ func (s *Scheduler) Initialize(ctx context.Context) error {
 	}
 
 	s.genesisTime = time.Unix(int64(genesis.Data.GenesisTime.Uint64()), 0)
+
+	// Initialize lastFinalEpoch to current finalized epoch to avoid catching up on old epochs
+	checkpoints, err := s.client.GetFinalityCheckpoints(ctx, "head")
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("Failed to get finality checkpoints during initialization")
+	} else {
+		s.lastFinalEpoch = checkpoints.Finalized.Epoch.Uint64()
+		s.logger.Info().
+			Uint64("initial_finalized_epoch", s.lastFinalEpoch).
+			Msg("Initialized last finalized epoch")
+	}
+
 	s.logger.Info().
 		Time("genesis_time", s.genesisTime).
 		Msg("Scheduler initialized with genesis time")
@@ -53,13 +68,29 @@ func (s *Scheduler) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// CurrentSlot calculates the current slot based on genesis time.
+// CurrentSlot gets the current slot from the beacon API with caching.
+// Uses calculated slot as fallback to avoid blocking on API calls.
 func (s *Scheduler) CurrentSlot() uint64 {
+	// Use calculated slot as primary (fast, no API call)
+	// This is accurate enough for scheduling purposes
 	elapsed := time.Since(s.genesisTime)
 	if elapsed < 0 {
 		return 0
 	}
-	return uint64(elapsed / SlotDuration)
+	calculatedSlot := uint64(elapsed / s.slotDuration)
+
+	// Optionally verify with API, but don't block on it
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	slot, err := s.client.GetHeadSlot(ctx)
+	if err != nil {
+		// Use calculated slot if API fails
+		return calculatedSlot
+	}
+
+	// Use API slot if available (more accurate)
+	return slot
 }
 
 // CurrentEpoch returns the current epoch.
@@ -69,7 +100,7 @@ func (s *Scheduler) CurrentEpoch() uint64 {
 
 // SlotTime returns the start time of a slot.
 func (s *Scheduler) SlotTime(slot uint64) time.Time {
-	return s.genesisTime.Add(time.Duration(slot) * SlotDuration)
+	return s.genesisTime.Add(time.Duration(slot) * s.slotDuration)
 }
 
 // WaitForNextSlot waits until the next slot begins.
@@ -100,13 +131,20 @@ func (s *Scheduler) WaitForNextSlot(ctx context.Context) (uint64, error) {
 }
 
 // WaitForSlotInterval waits for the configured number of slots.
+// This uses a simple time-based wait (slot duration * interval) to avoid
+// getting stuck if genesis time is in the future or differs from the local clock.
 func (s *Scheduler) WaitForSlotInterval(ctx context.Context) (uint64, error) {
 	currentSlot := s.CurrentSlot()
 	targetSlot := currentSlot + uint64(s.intervalSlots)
-	targetTime := s.SlotTime(targetSlot)
-	waitDuration := time.Until(targetTime)
+	waitDuration := s.slotDuration * time.Duration(s.intervalSlots)
 
 	if waitDuration > 0 {
+		s.logger.Debug().
+			Uint64("current_slot", currentSlot).
+			Uint64("target_slot", targetSlot).
+			Dur("wait_duration", waitDuration).
+			Msg("Waiting for slot interval")
+
 		timer := time.NewTimer(waitDuration)
 		defer timer.Stop()
 
@@ -154,34 +192,46 @@ func (s *Scheduler) NextEvents(ctx context.Context, slot uint64) ([]ScheduleEven
 	})
 
 	// Check for epoch boundary (first slot of epoch)
-	if slot%SlotsPerEpoch == 0 && epoch != s.lastEpoch {
-		s.lastEpoch = epoch
-		// Fetch duties for the next epoch
+	// Also check if we're within 1 slot of an epoch boundary to catch it
+	isEpochBoundary := slot%SlotsPerEpoch == 0
+	isNearEpochBoundary := (slot+1)%SlotsPerEpoch == 0
+
+	if (isEpochBoundary || isNearEpochBoundary) && epoch != s.lastEpoch {
+		if isEpochBoundary {
+			s.lastEpoch = epoch
+		} else {
+			// We're 1 slot before epoch boundary, use next epoch
+			s.lastEpoch = epoch + 1
+		}
+
+		// Fetch duties for the next epoch (epoch + 1)
+		targetEpoch := epoch + 1
+		s.logger.Info().
+			Uint64("current_slot", slot).
+			Uint64("current_epoch", epoch).
+			Uint64("target_epoch", targetEpoch).
+			Bool("is_epoch_boundary", isEpochBoundary).
+			Bool("is_near_boundary", isNearEpochBoundary).
+			Msg("Detected epoch boundary, scheduling duties and rewards fetch")
+
+		// Schedule duties fetch for upcoming epoch
 		events = append(events, ScheduleEvent{
 			Slot:       slot,
-			Epoch:      epoch + 1, // Fetch duties for upcoming epoch
+			Epoch:      targetEpoch,
 			Type:       EventTypeEpochBoundary,
 			Validators: s.validators,
 		})
-	}
 
-	// Check for finalized epoch (typically 2 epochs behind)
-	checkpoints, err := s.client.GetFinalityCheckpoints(ctx, "head")
-	if err != nil {
-		s.logger.Warn().Err(err).Msg("Failed to get finality checkpoints")
-	} else {
-		finalizedEpoch := checkpoints.Finalized.Epoch.Uint64()
-		if finalizedEpoch > s.lastFinalEpoch {
-			// Fetch rewards for newly finalized epochs
-			for e := s.lastFinalEpoch + 1; e <= finalizedEpoch; e++ {
-				events = append(events, ScheduleEvent{
-					Slot:       slot,
-					Epoch:      e,
-					Type:       EventTypeEpochFinalized,
-					Validators: s.validators,
-				})
-			}
-			s.lastFinalEpoch = finalizedEpoch
+		// Schedule rewards fetch for the epoch that just completed (epoch - 1),
+		// so we get one rewards record per epoch in order.
+		if epoch > 0 {
+			rewardEpoch := epoch - 1
+			events = append(events, ScheduleEvent{
+				Slot:       slot,
+				Epoch:      rewardEpoch,
+				Type:       EventTypeEpochFinalized,
+				Validators: s.validators,
+			})
 		}
 	}
 

@@ -14,9 +14,17 @@ import (
 	"golang.org/x/time/rate"
 )
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Client is an HTTP client for the Beacon Node API.
 type Client struct {
 	baseURL    string
+	apiKey     string
 	httpClient *http.Client
 	limiter    *rate.Limiter
 	maxRetries int
@@ -44,6 +52,7 @@ func NewClient(cfg *config.Config) *Client {
 
 	return &Client{
 		baseURL:    cfg.BeaconNodeURL,
+		apiKey:     cfg.BeaconAPIKey,
 		httpClient: httpClient,
 		limiter:    limiter,
 		maxRetries: cfg.ScyllaDB.MaxRetries,
@@ -58,9 +67,16 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 	b := backoff.NewDefault()
 
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
-		// Wait for rate limiter
-		if err := c.limiter.Wait(ctx); err != nil {
-			return fmt.Errorf("rate limiter error: %w", err)
+		// Wait for rate limiter with timeout
+		// Use a shorter timeout to avoid context deadline issues
+		limiterCtx, limiterCancel := context.WithTimeout(ctx, 15*time.Second)
+		err := c.limiter.Wait(limiterCtx)
+		limiterCancel()
+		if err != nil {
+			if ctx.Err() != nil {
+				return fmt.Errorf("rate limiter error: context cancelled: %w", err)
+			}
+			return fmt.Errorf("rate limiter error: rate: Wait(n=1) exceeded timeout: %w", err)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, method, url, nil)
@@ -68,7 +84,20 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 			return fmt.Errorf("failed to create request: %w", err)
 		}
 
+		// Set standard headers
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+
+		// Set API key if provided (for providers like Tatum)
+		if c.apiKey != "" {
+			req.Header.Set("x-api-key", c.apiKey)
+		}
+
+		log.Debug().
+			Str("method", method).
+			Str("url", url).
+			Int("attempt", attempt+1).
+			Msg("Sending beacon API request")
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -108,16 +137,43 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 			return lastErr
 		}
 
-		// Check for other errors
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+		// Read response body once
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %w", err)
 		}
 
+		// Check for other errors
+		if resp.StatusCode != http.StatusOK {
+			bodyPreview := string(bodyBytes)
+			if len(bodyPreview) > 200 {
+				bodyPreview = bodyPreview[:200] + "..."
+			}
+			return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, bodyPreview)
+		}
+
+		log.Debug().
+			Str("method", method).
+			Str("path", path).
+			Int("status", resp.StatusCode).
+			Int("body_size", len(bodyBytes)).
+			Str("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).
+			Msg("Beacon API response received")
+
 		// Decode response
-		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+		if err := json.Unmarshal(bodyBytes, result); err != nil {
+			log.Error().
+				Err(err).
+				Str("body", string(bodyBytes[:min(500, len(bodyBytes))])).
+				Msg("Failed to decode response")
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
+
+		log.Debug().
+			Str("method", method).
+			Str("path", path).
+			Int("status", resp.StatusCode).
+			Msg("Beacon API request successful and parsed")
 
 		return nil
 	}
