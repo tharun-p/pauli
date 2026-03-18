@@ -3,6 +3,7 @@ package beacon
 import (
 	"context"
 	"fmt"
+	"strconv"
 )
 
 // GetValidator fetches a single validator's state.
@@ -17,6 +18,13 @@ func (c *Client) GetValidator(ctx context.Context, stateID string, validatorID u
 	}
 
 	return &resp.Data, nil
+}
+
+// GetValidatorAtSlot fetches a single validator's state at a specific slot.
+// It is a convenience wrapper around GetValidator that formats the slot as a stateID.
+func (c *Client) GetValidatorAtSlot(ctx context.Context, slot uint64, validatorID uint64) (*Validator, error) {
+	stateID := strconv.FormatUint(slot, 10)
+	return c.GetValidator(ctx, stateID, validatorID)
 }
 
 // GetValidatorByPubkey fetches a validator's state by public key.

@@ -366,26 +366,18 @@ func (m *Monitor) getCachedHeadSlot(ctx context.Context) (uint64, error) {
 
 // processStatusJob fetches and stores validator status.
 func (m *Monitor) processStatusJob(ctx context.Context, job Job) (*storage.ValidatorSnapshot, error) {
-	// Use cached head slot to avoid redundant API calls
-	currentSlot, err := m.getCachedHeadSlot(ctx)
-	if err != nil {
-		m.logger.Warn().Err(err).Uint64("job_slot", job.Slot).Msg("Failed to get current slot, using job slot")
-		currentSlot = job.Slot
-	}
-
 	m.logger.Debug().
 		Uint64("validator_index", job.ValidatorIndex).
-		Uint64("job_slot", job.Slot).
-		Uint64("current_slot", currentSlot).
-		Msg("Fetching validator status from beacon API")
+		Uint64("slot", job.Slot).
+		Msg("Fetching validator status from beacon API at specific slot")
 
-	validator, err := m.client.GetValidator(ctx, "head", job.ValidatorIndex)
+	validator, err := m.client.GetValidatorAtSlot(ctx, job.Slot, job.ValidatorIndex)
 	if err != nil {
 		m.logger.Error().
 			Err(err).
 			Uint64("validator_index", job.ValidatorIndex).
 			Uint64("slot", job.Slot).
-			Msg("Failed to fetch validator from beacon API")
+			Msg("Failed to fetch validator from beacon API at slot")
 		return nil, fmt.Errorf("failed to fetch validator %d: %w", job.ValidatorIndex, err)
 	}
 
@@ -396,20 +388,9 @@ func (m *Monitor) processStatusJob(ctx context.Context, job Job) (*storage.Valid
 		Uint64("effective_balance", validator.Validator.EffectiveBalance.Uint64()).
 		Msg("Successfully fetched validator data from beacon API")
 
-	// Use job slot if it's close to current slot (within 2 slots), otherwise use current slot
-	// This prevents missing slots when there's a small delay
-	finalSlot := currentSlot
-	if job.Slot > 0 && (currentSlot == 0 || (currentSlot >= job.Slot && currentSlot-job.Slot <= 2)) {
-		finalSlot = job.Slot
-	} else if currentSlot > 0 {
-		finalSlot = currentSlot
-	} else {
-		finalSlot = job.Slot
-	}
-
 	snapshot := &storage.ValidatorSnapshot{
 		ValidatorIndex:   job.ValidatorIndex,
-		Slot:             finalSlot,
+		Slot:             job.Slot,
 		Status:           validator.Status,
 		Balance:          validator.Balance.Uint64(),
 		EffectiveBalance: validator.Validator.EffectiveBalance.Uint64(),
