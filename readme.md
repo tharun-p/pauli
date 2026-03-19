@@ -1,6 +1,6 @@
 # Pauli - Ethereum Validator Indexing Service
 
-`pauli` indexes validator data from a Beacon Node and persists it to **ScyllaDB/Cassandra** or **PostgreSQL** (chosen via `database_driver`).
+`pauli` indexes validator data from a Beacon Node and persists it to **ScyllaDB/Cassandra** or **PostgreSQL** 
 
 This project is a data indexing service for validator operations. It is **not** a governance framework or protocol decision system.
 
