@@ -1,95 +1,52 @@
-# Pauli - Ethereum Validator Monitor
+# Pauli - Ethereum Validator Indexing Service
 
-A high-performance Ethereum validator monitoring service written in Go. Tracks validator status, effective balance, attestation duties, and consensus layer rewards via the Beacon Node API with full persistence to ScyllaDB.
+`pauli` indexes validator data from a Beacon Node and persists it to **ScyllaDB/Cassandra** or **PostgreSQL** (chosen via `database_driver`).
 
-## Features
+This project is a data indexing service for validator operations. It is **not** a governance framework or protocol decision system.
 
-- **Real-time Monitoring** - Polls validator status and balances every slot (12 seconds)
-- **MaxEB Support** - Full EIP-7251 compatibility for effective balances up to 2048 ETH
-- **Attestation Tracking** - Monitors duty assignments and reward/penalty breakdowns
-- **ScyllaDB Persistence** - Time-series storage with configurable TTL for all metrics
-- **Worker Pool** - Concurrent monitoring of 100+ validators without rate limit issues
-- **Exponential Backoff** - Graceful handling of 429/503 errors
-- **Structured Logging** - JSON output via zerolog for easy parsing
+## What It Does
 
-## Prerequisites
+- Polls validator status and balances on a slot schedule
+- Indexes attestation duties at epoch boundaries
+- Indexes attestation rewards after finalization
+- Persists indexed records to the configured backend (TTL / retention via `ttl_days` where applicable)
+- Emits structured JSON logs for ops and debugging
 
-- Go 1.24+
-- ScyllaDB or Cassandra cluster
-- Access to an Ethereum Beacon Node (Lighthouse, Prysm, Teku, etc.)
+## Requirements
 
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/tharun/pauli.git
-cd pauli
-
-# Build
-go build -o validator-monitor .
-```
+- Go `1.24+`
+- One of: **ScyllaDB/Cassandra** or **PostgreSQL** (16+ is typical)
+- Access to an Ethereum Beacon Node API (Lighthouse, Prysm, Teku, etc.)
 
 ## Quick Start
 
-1. **Configure ScyllaDB** - Ensure your cluster is running on the configured hosts
+```bash
+git clone https://github.com/tharun/pauli.git
+cd pauli
+go build -o validator-monitor .
+./validator-monitor -config config.yaml
+```
 
-2. **Edit config.yaml** - Set your Beacon Node URL and validator indices:
+## Config
+
+Set `database_driver` to `"scylladb"` (default if omitted) or `"postgres"`. Only the block for the active driver needs to match your environment; you can keep both in one file for switching.
+
+**ScyllaDB / Cassandra**
 
 ```yaml
 beacon_node_url: "http://localhost:5052"
 validators:
   - 12345
   - 67890
-```
-
-3. **Run the monitor**:
-
-```bash
-./validator-monitor -config config.yaml
-```
-
-## Usage
-
-```bash
-# Run with default config
-./validator-monitor -config config.yaml
-
-# Run with debug logging
-./validator-monitor -config config.yaml -debug
-
-# Run in background
-nohup ./validator-monitor -config config.yaml > monitor.log 2>&1 &
-```
-
-## Configuration
-
-```yaml
-# Beacon Node API endpoint
-beacon_node_url: "http://localhost:5052"
-
-# Validator indices to monitor
-validators:
-  - 12345
-  - 67890
-  - 111213
-
-# Polling interval in slots (1 slot = 12 seconds)
 polling_interval_slots: 1
-
-# Concurrent workers
 worker_pool_size: 10
 
-# Rate limiting
 rate_limit:
   requests_per_second: 50
   burst: 100
 
-# HTTP client settings
-http:
-  timeout_seconds: 30
-  max_idle_conns: 100
+database_driver: "scylladb" # or omit; empty defaults to scylladb
 
-# ScyllaDB connection
 scylladb:
   hosts:
     - "127.0.0.1:9042"
@@ -101,263 +58,140 @@ scylladb:
   ttl_days: 90
 ```
 
-## Architecture
+**PostgreSQL**
 
-```mermaid
-flowchart TB
-    subgraph main [Main Process]
-        Config[Config Loader]
-        Scheduler[Slot Scheduler]
-        Shutdown[Graceful Shutdown]
-    end
-    
-    subgraph beacon [internal/beacon]
-        Client[HTTP Client]
-        RateLimiter[Rate Limiter]
-        Backoff[Exponential Backoff]
-    end
-    
-    subgraph monitor [internal/monitor]
-        WorkerPool[Worker Pool]
-        StatusTracker[Status Tracker]
-        DutyFetcher[Duty Fetcher]
-        RewardCalc[Reward Calculator]
-    end
-    
-    subgraph storage [internal/storage]
-        ScyllaClient[ScyllaDB Client]
-        Repository[Validator Repository]
-        Migration[Schema Migration]
-    end
-    
-    subgraph output [Output]
-        Logger[zerolog JSON Logger]
-        ScyllaDB[(ScyllaDB)]
-    end
-    
-    Config --> Scheduler
-    Config --> ScyllaClient
-    Scheduler --> WorkerPool
-    WorkerPool --> Client
-    Client --> RateLimiter
-    RateLimiter --> Backoff
-    StatusTracker --> Repository
-    DutyFetcher --> Repository
-    RewardCalc --> Repository
-    Repository --> ScyllaDB
-    StatusTracker --> Logger
-    DutyFetcher --> Logger
-    RewardCalc --> Logger
+```yaml
+beacon_node_url: "http://localhost:5052"
+validators:
+  - 12345
+  - 67890
+polling_interval_slots: 1
+worker_pool_size: 10
+
+rate_limit:
+  requests_per_second: 50
+  burst: 100
+
+database_driver: "postgres"
+
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "pauli"
+  password: "pauli"
+  database: "validator_monitor"
+  ssl_mode: "disable"
+  max_conns: 10
+  ttl_days: 90
 ```
 
-## Data Flow
+A full example with both backends is in `config.yaml`. For local Postgres, see `docker.compose.postgres`.
 
-```mermaid
-sequenceDiagram
-    participant S as Scheduler
-    participant W as Worker Pool
-    participant B as Beacon API
-    participant R as Repository
-    participant DB as ScyllaDB
-    participant L as Logger
-    
-    S->>W: Dispatch slot job
-    W->>B: GET /validators/{id}
-    B-->>W: Status + Balances
-    W->>R: SaveValidatorSnapshot
-    R->>DB: INSERT with TTL
-    DB-->>R: OK
-    W->>L: Log JSON output
-    
-    Note over S,DB: On epoch boundary
-    W->>B: GET /duties/attester/{epoch}
-    B-->>W: Attestation duties
-    W->>R: SaveAttestationDuties
-    R->>DB: INSERT with TTL
-    
-    Note over S,DB: After epoch finalization
-    W->>B: GET /rewards/attestations/{epoch}
-    B-->>W: Rewards breakdown
-    W->>R: SaveRewards
-    R->>DB: INSERT with TTL
+## Run Options
+
+```bash
+# standard
+./validator-monitor -config config.yaml
+
+# verbose logs
+./validator-monitor -config config.yaml -debug
+
+# background
+nohup ./validator-monitor -config config.yaml > monitor.log 2>&1 &
 ```
 
-## Project Structure
+## Indexed Data
 
-```
-pauli/
-├── main.go                      # Entry point with graceful shutdown
-├── config.yaml                  # Configuration file
-├── internal/
-│   ├── config/
-│   │   └── config.go            # YAML config loader
-│   ├── beacon/
-│   │   ├── client.go            # HTTP client with rate limiting
-│   │   ├── types.go             # API response structs
-│   │   ├── validators.go        # Validator status endpoint
-│   │   ├── duties.go            # Attestation duties endpoint
-│   │   └── rewards.go           # Attestation rewards endpoint
-│   ├── storage/
-│   │   ├── scylla.go            # ScyllaDB client and connection
-│   │   ├── migrations.go        # Schema auto-migration
-│   │   ├── models.go            # Database models
-│   │   └── repository.go        # Data access layer
-│   └── monitor/
-│       ├── monitor.go           # Core monitoring loop
-│       ├── worker.go            # Worker pool implementation
-│       └── scheduler.go         # Slot-based scheduling
-└── pkg/
-    └── backoff/
-        └── backoff.go           # Exponential backoff utility
-```
+Pauli currently stores four validator-focused datasets:
 
-## Monitoring Logic
+- `validator_snapshots`: status, balance, effective balance per slot
+- `attestation_duties`: duty assignment data per epoch/slot
+- `attestation_rewards`: head/source/target rewards per epoch
+- `validator_penalties`: slashing/inactivity penalty records
 
-| Event | Trigger | Action |
-|-------|---------|--------|
-| Slot Poll | Every N slots | Fetch validator status and balance |
-| Epoch Boundary | First slot of epoch | Fetch attestation duties for next epoch |
-| Epoch Finalized | After finalization | Fetch attestation rewards for completed epoch |
+## How Indexing Is Scheduled
 
-## Log Output
+Indexing is driven by a **reconciliation loop**, not a single tick per slot. The service keeps cursors in memory and catches up to chain head on each pass, with limits per pass so the beacon node isn’t hammered after downtime.
 
-The monitor outputs structured JSON logs:
+### Time and epochs
 
-```json
-{
-  "level": "info",
-  "time": "2026-01-16T10:00:00Z",
-  "slot": 1234567,
-  "validator_index": 12345,
-  "status": "active_ongoing",
-  "effective_balance_gwei": 64000000000,
-  "balance_gwei": 64125000000,
-  "msg": "validator_status"
-}
-```
+- **Genesis time** comes from the beacon API; slots are derived from elapsed time and **`slot_duration_seconds`** (default **12s**, mainnet—use a smaller value on fast devnets, e.g. Kurtosis).
+- **32 slots per epoch** (Ethereum consensus); epoch = `slot / 32`.
 
-```json
-{
-  "level": "info",
-  "time": "2026-01-16T10:00:00Z",
-  "epoch": 38580,
-  "validator_index": 12345,
-  "head_reward": 12500,
-  "source_reward": 12500,
-  "target_reward": 12500,
-  "total_reward_gwei": 37500,
-  "duty_success": true,
-  "msg": "attestation_reward"
-}
-```
+### Loop pacing (`polling_interval_slots`)
 
-## Database Schema
+After each iteration, the loop sleeps for **`polling_interval_slots` × slot duration**, then:
 
-Four time-series tables optimized for validator queries:
+1. Reads **head slot** from the node (with a small cache).
+2. Runs reconciliation for **snapshots**, **duties**, and **rewards** (below).
 
-### validator_snapshots
-Per-slot balance and status tracking.
+So “every N slots” means **how often a full reconciliation pass runs**, not “only fetch slot S when S mod N == 0.”
 
-```sql
-CREATE TABLE validator_snapshots (
-    validator_index BIGINT,
-    slot            BIGINT,
-    status          TEXT,
-    balance         BIGINT,
-    effective_balance BIGINT,
-    timestamp       TIMESTAMP,
-    PRIMARY KEY ((validator_index), slot)
-) WITH CLUSTERING ORDER BY (slot DESC);
-```
+### Validator snapshots (per-slot state)
 
-### attestation_duties
-Per-epoch duty assignments.
+- Cursor: last processed snapshot slot (initialized to **head slot** on startup, then advances as the chain moves).
+- Each pass: process slots **`lastSnapshotSlot + 1` … `headSlot`**, in order.
+- **Cap:** at most **32 slots** per pass; remaining slots are picked up on later passes.
+- For each slot: fetch **validator status / balances** for all configured indices (worker pool + rate limit).
 
-```sql
-CREATE TABLE attestation_duties (
-    validator_index   BIGINT,
-    epoch             BIGINT,
-    slot              BIGINT,
-    committee_index   INT,
-    committee_position INT,
-    timestamp         TIMESTAMP,
-    PRIMARY KEY ((validator_index), epoch, slot)
-) WITH CLUSTERING ORDER BY (epoch DESC, slot DESC);
-```
+### Attestation duties
 
-### attestation_rewards
-Per-epoch rewards breakdown (head, source, target).
+- Cursor: last epoch for which duties were indexed.
+- Each pass: advance toward **`currentEpoch + 1`** (from head), where `currentEpoch = headSlot / 32`, so duties for the **next** epoch the chain is entering are covered.
+- **Cap:** at most **8 epochs** of duty work per pass.
 
-```sql
-CREATE TABLE attestation_rewards (
-    validator_index BIGINT,
-    epoch           BIGINT,
-    head_reward     BIGINT,
-    source_reward   BIGINT,
-    target_reward   BIGINT,
-    total_reward    BIGINT,
-    timestamp       TIMESTAMP,
-    PRIMARY KEY ((validator_index), epoch)
-) WITH CLUSTERING ORDER BY (epoch DESC);
-```
+### Attestation rewards (and derived penalties)
 
-### validator_penalties
-Slashing and inactivity penalties.
+- Rewards are only meaningful once an epoch is **finalized**. The loop reads the beacon **finalized checkpoint** and advances the rewards cursor from **`lastRewardsEpoch + 1` … `finalizedEpoch`**.
+- **Cap:** at most **8 epochs** of reward fetches per pass.
+- On startup, the rewards cursor is seeded from **current finalized epoch** so the process doesn’t try to replay the entire chain history.
+- **Penalties** in storage are written when processing reward results (e.g. missed attestation / negative net reward)—same reconciliation pass as rewards, not a separate schedule.
 
-```sql
-CREATE TABLE validator_penalties (
-    validator_index BIGINT,
-    epoch           BIGINT,
-    slot            BIGINT,
-    penalty_type    TEXT,
-    penalty_gwei    BIGINT,
-    timestamp       TIMESTAMP,
-    PRIMARY KEY ((validator_index), epoch, slot)
-) WITH CLUSTERING ORDER BY (epoch DESC, slot DESC);
-```
+### Summary
 
-## HTTP Client Features
+| Work stream | What moves forward | Beacon inputs |
+|-------------|-------------------|----------------|
+| Snapshots | Unprocessed slots up to head | Head slot, validator APIs |
+| Duties | Epochs up to `currentEpoch + 1` | Duties for target epochs |
+| Rewards | Finalized epochs only | Finality checkpoints + rewards API |
 
-- Optimized `net/http` transport with connection pooling
-- HTTP/2 enabled by default
-- Token bucket rate limiter via `golang.org/x/time/rate`
-- Exponential backoff with jitter for 429/503 errors
-
-| Setting | Value |
-|---------|-------|
-| Max Idle Connections | 100 |
-| Idle Connection Timeout | 90s |
-| Initial Backoff | 100ms |
-| Max Backoff | 30s |
-| Backoff Multiplier | 2x |
-| Jitter | ±20% |
-
-## Worker Pool
+## High-Level Flow
 
 ```mermaid
 flowchart LR
-    JobQueue[Job Channel] --> W1[Worker 1]
-    JobQueue --> W2[Worker 2]
-    JobQueue --> W3[Worker N]
-    W1 --> Results[Result Channel]
-    W2 --> Results
-    W3 --> Results
-    Results --> Logger[JSON Logger]
-    Results --> DB[(ScyllaDB)]
+    A[Scheduler] --> B[Worker Pool]
+    B --> C[Beacon Node API]
+    B --> D[Repository]
+    D --> E[(ScyllaDB or Postgres)]
+    B --> F[JSON Logs]
 ```
 
-- Fixed pool of N goroutines (configurable)
-- Job channel distributes validator indices to workers
-- Prevents goroutine explosion when monitoring 100+ validators
+## Project Layout
 
-## Dependencies
+```
+pauli/
+├── main.go
+├── config.yaml
+├── internal/
+│   ├── beacon/      # Beacon API client + endpoint handlers
+│   ├── config/      # YAML config loading/validation
+│   ├── monitor/     # scheduler + workers + indexing loop
+│   ├── storage/     # Store/Repository interfaces + models
+│   ├── storage/scylladb/
+│   ├── storage/postgres/
+│   └── store/       # picks backend from database_driver
+├── sql/
+│   ├── migrations/     # CQL for Scylla
+│   └── migrations_pg/ # SQL for Postgres
+└── pkg/
+    └── backoff/     # retry/backoff utility
+```
 
-| Package | Purpose |
-|---------|---------|
-| `github.com/gocql/gocql` | ScyllaDB/Cassandra driver |
-| `github.com/rs/zerolog` | High-performance JSON logging |
-| `golang.org/x/time/rate` | Token bucket rate limiter |
-| `gopkg.in/yaml.v3` | YAML configuration parsing |
+## Notes
+
+- Built for validator indexing and operational visibility
+- Uses rate limiting and exponential backoff to reduce node/API pressure
+- Supports Max Effective Balance flows (EIP-7251 context) through Beacon data indexing
 
 ## License
 
