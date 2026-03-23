@@ -5,56 +5,25 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+	"github.com/tharun/pauli/internal/monitor/core"
 )
-
-// Job represents a unit of work to be processed by a worker.
-type Job struct {
-	ValidatorIndex uint64
-	Slot           uint64
-	Epoch          uint64
-	Type           JobType
-}
-
-// JobType defines the type of monitoring job.
-type JobType int
-
-const (
-	// JobTypeStatus fetches validator status and balance.
-	JobTypeStatus JobType = iota
-	// JobTypeDuties fetches attestation duties for an epoch.
-	JobTypeDuties
-	// JobTypeRewards fetches attestation rewards for an epoch.
-	JobTypeRewards
-)
-
-// Result represents the outcome of processing a job.
-type Result struct {
-	Job   Job
-	Data  interface{}
-	Error error
-}
 
 // WorkerPool manages a pool of workers for concurrent processing.
 type WorkerPool struct {
 	size       int
-	jobChan    chan Job
-	resultChan chan Result
+	jobChan    chan core.Job
+	resultChan chan core.Result
 	wg         sync.WaitGroup
-	processor  JobProcessor
+	processor  core.JobProcessor
 	logger     zerolog.Logger
 }
 
-// JobProcessor defines the interface for processing jobs.
-type JobProcessor interface {
-	Process(ctx context.Context, job Job) (interface{}, error)
-}
-
 // NewWorkerPool creates a new WorkerPool with the specified size.
-func NewWorkerPool(size int, processor JobProcessor, logger zerolog.Logger) *WorkerPool {
+func NewWorkerPool(size int, processor core.JobProcessor, logger zerolog.Logger) *WorkerPool {
 	return &WorkerPool{
 		size:       size,
-		jobChan:    make(chan Job, size*2),
-		resultChan: make(chan Result, size*2),
+		jobChan:    make(chan core.Job, size*2),
+		resultChan: make(chan core.Result, size*2),
 		processor:  processor,
 		logger:     logger,
 	}
@@ -88,7 +57,7 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 			}
 
 			data, err := wp.processor.Process(ctx, job)
-			result := Result{
+			result := core.Result{
 				Job:   job,
 				Data:  data,
 				Error: err,
@@ -104,19 +73,17 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 }
 
 // Submit adds a job to the queue.
-func (wp *WorkerPool) Submit(job Job) {
-	wp.jobChan <- job
-}
-
-// SubmitBatch adds multiple jobs to the queue.
-func (wp *WorkerPool) SubmitBatch(jobs []Job) {
-	for _, job := range jobs {
-		wp.jobChan <- job
+func (wp *WorkerPool) Submit(ctx context.Context, job core.Job) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case wp.jobChan <- job:
+		return nil
 	}
 }
 
 // Results returns the result channel for reading completed jobs.
-func (wp *WorkerPool) Results() <-chan Result {
+func (wp *WorkerPool) Results() <-chan core.Result {
 	return wp.resultChan
 }
 
@@ -126,40 +93,4 @@ func (wp *WorkerPool) Stop() {
 	wp.wg.Wait()
 	close(wp.resultChan)
 	wp.logger.Info().Msg("Worker pool stopped")
-}
-
-// Drain reads all remaining results from the result channel.
-func (wp *WorkerPool) Drain() []Result {
-	var results []Result
-	for result := range wp.resultChan {
-		results = append(results, result)
-	}
-	return results
-}
-
-// SubmitAndWait submits jobs and waits for all results.
-func (wp *WorkerPool) SubmitAndWait(ctx context.Context, jobs []Job) []Result {
-	// Submit all jobs
-	go func() {
-		for _, job := range jobs {
-			select {
-			case wp.jobChan <- job:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Collect results
-	results := make([]Result, 0, len(jobs))
-	for i := 0; i < len(jobs); i++ {
-		select {
-		case result := <-wp.resultChan:
-			results = append(results, result)
-		case <-ctx.Done():
-			return results
-		}
-	}
-
-	return results
 }
