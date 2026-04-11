@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/tharun/pauli/internal/storage"
 )
 
@@ -59,11 +60,41 @@ func (r *Repository) SaveValidatorSnapshot(ctx context.Context, snapshot *storag
 	return nil
 }
 
-// SaveValidatorSnapshots saves multiple validator snapshots.
+// SaveValidatorSnapshots saves multiple validator snapshots in one round trip.
 func (r *Repository) SaveValidatorSnapshots(ctx context.Context, snapshots []*storage.ValidatorSnapshot) error {
+	if len(snapshots) == 0 {
+		return nil
+	}
+	const query = `
+		INSERT INTO validator_snapshots (
+			validator_index, slot, status, balance, effective_balance, timestamp
+		) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (validator_index, slot) DO UPDATE SET
+			status = EXCLUDED.status,
+			balance = EXCLUDED.balance,
+			effective_balance = EXCLUDED.effective_balance,
+			timestamp = EXCLUDED.timestamp
+	`
+	now := time.Now().UTC()
+	batch := &pgx.Batch{}
 	for _, snapshot := range snapshots {
-		if err := r.SaveValidatorSnapshot(ctx, snapshot); err != nil {
-			return err
+		if snapshot.Timestamp.IsZero() {
+			snapshot.Timestamp = now
+		}
+		batch.Queue(query,
+			snapshot.ValidatorIndex,
+			snapshot.Slot,
+			snapshot.Status,
+			snapshot.Balance,
+			snapshot.EffectiveBalance,
+			snapshot.Timestamp,
+		)
+	}
+	br := r.client.Pool.SendBatch(ctx, batch)
+	defer br.Close()
+	for range snapshots {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("failed to save validator snapshots batch: %w", err)
 		}
 	}
 	return nil

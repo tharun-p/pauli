@@ -33,7 +33,7 @@ type MigrationRecord struct {
 
 // RunMigrations loads and executes all pending PostgreSQL migrations.
 func (c *Client) RunMigrations() error {
-	log.Info().Msg("Running PostgreSQL migrations...")
+	log.Debug().Msg("Running PostgreSQL migrations...")
 
 	// Load migrations from embedded files
 	migrations, err := loadMigrationsPG()
@@ -41,7 +41,7 @@ func (c *Client) RunMigrations() error {
 		return fmt.Errorf("failed to load postgres migrations: %w", err)
 	}
 
-	log.Info().Int("total", len(migrations)).Msg("Loaded postgres migration files")
+	log.Debug().Int("total", len(migrations)).Msg("Loaded postgres migration files")
 
 	// Ensure schema_migrations table exists (bootstrap)
 	if err := c.ensureMigrationsTable(); err != nil {
@@ -69,9 +69,9 @@ func (c *Client) RunMigrations() error {
 	}
 
 	if appliedCount > 0 {
-		log.Info().Int("applied", appliedCount).Msg("PostgreSQL migrations applied successfully")
+		log.Debug().Int("applied", appliedCount).Msg("PostgreSQL migrations applied successfully")
 	} else {
-		log.Info().Msg("No new PostgreSQL migrations to apply")
+		log.Debug().Msg("No new PostgreSQL migrations to apply")
 	}
 
 	return nil
@@ -189,7 +189,7 @@ func (c *Client) getAppliedMigrations() (map[string]*MigrationRecord, error) {
 
 // applyMigration executes a single migration.
 func (c *Client) applyMigration(m *Migration) error {
-	log.Info().
+	log.Debug().
 		Str("version", m.Version).
 		Str("name", m.Name).
 		Msg("Applying postgres migration")
@@ -229,7 +229,7 @@ func (c *Client) applyMigration(m *Migration) error {
 		return fmt.Errorf("failed to commit migration %s: %w", m.Version, err)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("version", m.Version).
 		Str("name", m.Name).
 		Msg("Postgres migration applied successfully")

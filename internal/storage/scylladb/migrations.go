@@ -40,7 +40,7 @@ var tableNames = []string{
 
 // RunMigrations loads and executes all pending migrations.
 func (c *Client) RunMigrations() error {
-	log.Info().Msg("Running ScyllaDB migrations...")
+	log.Debug().Msg("Running ScyllaDB migrations...")
 
 	// Load migrations from embedded files
 	migrations, err := loadMigrations()
@@ -48,7 +48,7 @@ func (c *Client) RunMigrations() error {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
 
-	log.Info().Int("total", len(migrations)).Msg("Loaded migration files")
+	log.Debug().Int("total", len(migrations)).Msg("Loaded migration files")
 
 	// Ensure schema_migrations table exists (bootstrap)
 	if err := c.ensureMigrationsTable(); err != nil {
@@ -81,9 +81,9 @@ func (c *Client) RunMigrations() error {
 	}
 
 	if appliedCount > 0 {
-		log.Info().Int("applied", appliedCount).Msg("Migrations applied successfully")
+		log.Debug().Int("applied", appliedCount).Msg("Migrations applied successfully")
 	} else {
-		log.Info().Msg("No new migrations to apply")
+		log.Debug().Msg("No new migrations to apply")
 	}
 
 	return nil
@@ -188,7 +188,7 @@ func (c *Client) getAppliedMigrations() (map[string]*MigrationRecord, error) {
 
 // applyMigration executes a single migration.
 func (c *Client) applyMigration(m *Migration) error {
-	log.Info().
+	log.Debug().
 		Str("version", m.Version).
 		Str("name", m.Name).
 		Msg("Applying migration")
@@ -216,7 +216,7 @@ func (c *Client) applyMigration(m *Migration) error {
 		return fmt.Errorf("failed to record migration %s: %w", m.Version, err)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("version", m.Version).
 		Str("name", m.Name).
 		Msg("Migration applied successfully")

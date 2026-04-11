@@ -6,11 +6,12 @@ This project is a data indexing service for validator operations. It is **not** 
 
 ## What It Does
 
-- Polls validator status and balances on a slot schedule
-- Indexes attestation duties at epoch boundaries
-- Indexes attestation rewards after finalization
+- On each poll, reads **chain head** and runs a **linear step chain** (see below)
+- Writes **validator snapshots** at the current head slot (async workers)
+- Plans **duties** and **rewards** epochs at **slot/epoch boundaries** and indexes them when scheduled (async workers)
 - Persists indexed records to the configured backend (TTL / retention via `ttl_days` where applicable)
-- Emits structured JSON logs for ops and debugging
+- Optional **debug** logging (`-debug`); default run is quiet except fatal errors
+- **No historical catch-up** yet: one realtime pass per poll, not a multi-slot reconciliation cursor
 
 ## Requirements
 
@@ -93,7 +94,7 @@ A full example with both backends is in `config.yaml`. For local Postgres, see `
 # standard
 ./validator-monitor -config config.yaml
 
-# verbose logs
+# debug logs (stdout)
 ./validator-monitor -config config.yaml -debug
 
 # background
@@ -111,59 +112,56 @@ Pauli currently stores four validator-focused datasets:
 
 ## How Indexing Is Scheduled
 
-Indexing is driven by a **reconciliation loop**, not a single tick per slot. The service keeps cursors in memory and catches up to chain head on each pass, with limits per pass so the beacon node isn’t hammered after downtime.
+Indexing is driven by a **realtime runner loop** (`internal/monitor/runner` + `runner/realtime`), not a multi-slot reconciliation cursor. Each cycle waits for **`polling_interval_slots` × slot duration**, then runs a fixed **chain of steps** from `internal/monitor/steps/realtime`. For package-level flow diagrams, see **`doc/monitor-e2e-flow.md`**.
 
 ### Time and epochs
 
-- **Genesis time** comes from the beacon API; slots are derived from elapsed time and **`slot_duration_seconds`** (default **12s**, mainnet—use a smaller value on fast devnets, e.g. Kurtosis).
+- **Genesis time** is loaded from the beacon API at startup and stored on **`BlockchainNetwork`** (wall-clock anchor for poll timing).
+- **`slot_duration_seconds`** (default **12s**, mainnet) scales the poll interval; use a smaller value on fast devnets (e.g. Kurtosis).
 - **32 slots per epoch** (Ethereum consensus); epoch = `slot / 32`.
 
 ### Loop pacing (`polling_interval_slots`)
 
-After each iteration, the loop sleeps for **`polling_interval_slots` × slot duration**, then:
+After **`BeforeStep`** (`BlockchainNetwork.WaitPollInterval`), one iteration does:
 
-1. Reads **head slot** from the node (with a small cache).
-2. Runs reconciliation for **snapshots**, **duties**, and **rewards** (below).
+1. **`StepChain`** returns the same ordered steps every time: **GetValidatorDetails** → **ValidatorsBalanceAtSlot** → **ValidatorDuties** → **AttestationRewardsAtBoundary**.
+2. **`Env().Reset(ctx)`** clears per-iteration shared state, then each step’s **`Run(env)`** runs on the **runner goroutine**.
 
-So “every N slots” means **how often a full reconciliation pass runs**, not “only fetch slot S when S mod N == 0.”
+So **`polling_interval_slots`** controls **how often** that full chain runs, not “only when slot mod N == 0.”
 
-### Validator snapshots (per-slot state)
+### Sync vs async steps
 
-- Cursor: last processed snapshot slot (initialized to **head slot** on startup, then advances as the chain moves).
-- Each pass: process slots **`lastSnapshotSlot + 1` … `headSlot`**, in order.
-- **Cap:** at most **32 slots** per pass; remaining slots are picked up on later passes.
-- For each slot: fetch **validator status / balances** for all configured indices (worker pool + rate limit).
+- **Sync** (**GetValidatorDetails**): fetches **head slot**, copies configured validators into **`Env`**, and at **epoch boundaries** (first or last slot of an epoch, with **dedup** via runner-owned **`lastEpoch`**) sets **`Env.DutiesEpoch`** / **`Env.RewardsEpoch`** when work is planned.
+- **Async** steps: **`Run`** returns whether to **enqueue** a **`steps.Job`** (the step plus a **cloned `Env`**). Workers call **`Step.RunAsync`** and talk to the beacon node + repository. Heavy I/O runs on the **worker pool** (`worker_pool_size`).
 
-### Attestation duties
+### What each step does (current behavior)
 
-- Cursor: last epoch for which duties were indexed.
-- Each pass: advance toward **`currentEpoch + 1`** (from head), where `currentEpoch = headSlot / 32`, so duties for the **next** epoch the chain is entering are covered.
-- **Cap:** at most **8 epochs** of duty work per pass.
+| Step | Runner vs worker | Role |
+|------|------------------|------|
+| **GetValidatorDetails** | Runner (sync) | Head slot, validator list on **`Env`**, boundary plan for duties/rewards epochs |
+| **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Batched validator state at **`Env.HeadSlot`** → snapshots |
+| **ValidatorDuties** | Worker (`RunAsync`) | Attester duties for **`Env.DutiesEpoch`** when set; skipped when nil |
+| **AttestationRewardsAtBoundary** | Worker (`RunAsync`) | Rewards (and derived penalties) for **`Env.RewardsEpoch`** when set; skipped when nil |
 
-### Attestation rewards (and derived penalties)
+**Penalties** are still written from reward processing when net reward is negative; there is no separate penalty scheduler.
 
-- Rewards are only meaningful once an epoch is **finalized**. The loop reads the beacon **finalized checkpoint** and advances the rewards cursor from **`lastRewardsEpoch + 1` … `finalizedEpoch`**.
-- **Cap:** at most **8 epochs** of reward fetches per pass.
-- On startup, the rewards cursor is seeded from **current finalized epoch** so the process doesn’t try to replay the entire chain history.
-- **Penalties** in storage are written when processing reward results (e.g. missed attestation / negative net reward)—same reconciliation pass as rewards, not a separate schedule.
+### Out of scope today
 
-### Summary
-
-| Work stream | What moves forward | Beacon inputs |
-|-------------|-------------------|----------------|
-| Snapshots | Unprocessed slots up to head | Head slot, validator APIs |
-| Duties | Epochs up to `currentEpoch + 1` | Duties for target epochs |
-| Rewards | Finalized epochs only | Finality checkpoints + rewards API |
+- **Historical backfill** / catch-up over many slots or epochs in one process is **not** implemented; the README’s older “cursor + cap per pass” description referred to a design that is **not** in the current tree.
 
 ## High-Level Flow
 
 ```mermaid
 flowchart LR
-    A[Scheduler] --> B[Worker Pool]
-    B --> C[Beacon Node API]
-    B --> D[Repository]
-    D --> E[(ScyllaDB or Postgres)]
-    B --> F[JSON Logs]
+    A[Monitor] --> B[runner/realtime]
+    B --> C[BeforeStep: poll interval]
+    C --> D[Step chain: steps/realtime]
+    D --> E[Sync Run on runner]
+    D --> F[Enqueue steps.Job]
+    F --> G[Worker pool]
+    G --> H[RunAsync → Beacon API]
+    G --> I[RunAsync → Repository]
+    I --> J[(ScyllaDB or Postgres)]
 ```
 
 ## Project Layout
@@ -172,19 +170,27 @@ flowchart LR
 pauli/
 ├── main.go
 ├── config.yaml
+├── doc/
+│   └── monitor-e2e-flow.md   # monitor/runner/steps/queue sequence diagrams
 ├── internal/
-│   ├── beacon/      # Beacon API client + endpoint handlers
-│   ├── config/      # YAML config loading/validation
-│   ├── monitor/     # scheduler + workers + indexing loop
-│   ├── storage/     # Store/Repository interfaces + models
+│   ├── beacon/               # Beacon API client + endpoint handlers
+│   ├── config/               # YAML config loading/validation + BlockchainNetwork
+│   ├── monitor/
+│   │   ├── monitor.go        # wires pool + realtime runner
+│   │   ├── queue/            # worker pool; runs Step.RunAsync via steps.Job
+│   │   ├── runner/           # generic Run loop (BeforeStep → chain → Enqueue)
+│   │   ├── runner/realtime/  # pacing + StepChain implementation
+│   │   └── steps/            # Step, Env, Job
+│   │       └── steps/realtime/  # concrete indexing steps
+│   ├── storage/              # Store/Repository interfaces + models
 │   ├── storage/scylladb/
 │   ├── storage/postgres/
-│   └── store/       # picks backend from database_driver
+│   └── store/                # picks backend from database_driver
 ├── sql/
-│   ├── migrations/     # CQL for Scylla
-│   └── migrations_pg/ # SQL for Postgres
+│   ├── migrations/           # CQL for Scylla
+│   └── migrations_pg/      # SQL for Postgres
 └── pkg/
-    └── backoff/     # retry/backoff utility
+    └── backoff/              # retry/backoff utility
 ```
 
 ## Notes
@@ -192,6 +198,7 @@ pauli/
 - Built for validator indexing and operational visibility
 - Uses rate limiting and exponential backoff to reduce node/API pressure
 - Supports Max Effective Balance flows (EIP-7251 context) through Beacon data indexing
+- **Architecture detail:** `doc/monitor-e2e-flow.md` matches the current monitor implementation; treat it as the source of truth for control flow
 
 ## License
 

@@ -60,7 +60,7 @@ func (r *Repository) SaveValidatorSnapshot(ctx context.Context, snapshot *storag
 	).WithContext(ctx).Exec()
 
 	if err != nil {
-		log.Error().
+		log.Debug().
 			Err(err).
 			Uint64("validator_index", snapshot.ValidatorIndex).
 			Uint64("slot", snapshot.Slot).

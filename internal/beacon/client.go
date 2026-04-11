@@ -103,7 +103,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 		if err != nil {
 			lastErr = err
 			if attempt < c.maxRetries {
-				log.Warn().Err(err).Str("url", url).Int("attempt", attempt+1).Msg("Request failed, retrying")
+				log.Debug().Err(err).Str("url", url).Int("attempt", attempt+1).Msg("request failed, retrying")
 				if !b.Wait(ctx) {
 					return ctx.Err()
 				}
@@ -112,73 +112,79 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 			return fmt.Errorf("request failed after %d attempts: %w", attempt+1, err)
 		}
 
-		defer resp.Body.Close()
-
-		// Check for retryable errors
-		if backoff.ShouldRetry(resp.StatusCode) {
-			body, _ := io.ReadAll(resp.Body)
-			lastErr = &backoff.RetryableError{
-				StatusCode: resp.StatusCode,
-				Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)),
-			}
-
-			log.Warn().
+		retry, err := c.readDoRequestResponse(resp, method, path, result)
+		if retry {
+			lastErr = err
+			log.Debug().
 				Int("status", resp.StatusCode).
 				Str("url", url).
 				Int("attempt", attempt+1).
-				Msg("Retryable error, backing off")
-
+				Msg("retryable HTTP error, backing off")
 			if attempt < c.maxRetries {
 				if !b.Wait(ctx) {
 					return ctx.Err()
 				}
 				continue
 			}
-			return lastErr
+			return err
 		}
-
-		// Read response body once
-		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to read response body: %w", err)
+			return err
 		}
-
-		// Check for other errors
-		if resp.StatusCode != http.StatusOK {
-			bodyPreview := string(bodyBytes)
-			if len(bodyPreview) > 200 {
-				bodyPreview = bodyPreview[:200] + "..."
-			}
-			return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, bodyPreview)
-		}
-
-		log.Debug().
-			Str("method", method).
-			Str("path", path).
-			Int("status", resp.StatusCode).
-			Int("body_size", len(bodyBytes)).
-			Str("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).
-			Msg("Beacon API response received")
-
-		// Decode response
-		if err := json.Unmarshal(bodyBytes, result); err != nil {
-			log.Error().
-				Err(err).
-				Str("body", string(bodyBytes[:min(500, len(bodyBytes))])).
-				Msg("Failed to decode response")
-			return fmt.Errorf("failed to decode response: %w", err)
-		}
-
-		log.Debug().
-			Str("method", method).
-			Str("path", path).
-			Int("status", resp.StatusCode).
-			Msg("Beacon API request successful and parsed")
-
 		return nil
 	}
 
 	return lastErr
+}
+
+// readDoRequestResponse reads and closes resp.Body exactly once. If retry is true, err is a *backoff.RetryableError and the caller may re-issue the request after backoff.
+func (c *Client) readDoRequestResponse(resp *http.Response, method, path string, result interface{}) (retry bool, err error) {
+	defer resp.Body.Close()
+
+	if backoff.ShouldRetry(resp.StatusCode) {
+		b, _ := io.ReadAll(resp.Body)
+		return true, &backoff.RetryableError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(b)),
+		}
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyPreview := string(bodyBytes)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		return false, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, bodyPreview)
+	}
+
+	log.Debug().
+		Str("method", method).
+		Str("path", path).
+		Int("status", resp.StatusCode).
+		Int("body_size", len(bodyBytes)).
+		Str("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).
+		Msg("Beacon API response received")
+
+	if err := json.Unmarshal(bodyBytes, result); err != nil {
+		log.Debug().
+			Err(err).
+			Str("body", string(bodyBytes[:min(500, len(bodyBytes))])).
+			Msg("failed to decode beacon response")
+		return false, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	log.Debug().
+		Str("method", method).
+		Str("path", path).
+		Int("status", resp.StatusCode).
+		Msg("Beacon API request successful and parsed")
+
+	return false, nil
 }
 
 // get performs a GET request.
