@@ -18,7 +18,7 @@ type Repository interface {
 	Close() error
 }
 
-// Store abstracts a concrete database backend (ScyllaDB, PostgreSQL, etc.).
+// Store abstracts the database backend (PostgreSQL).
 type Store interface {
 	RunMigrations() error
 	HealthCheck() error

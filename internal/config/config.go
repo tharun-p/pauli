@@ -20,9 +20,9 @@ type Config struct {
 	WorkerPoolSize      int           `yaml:"worker_pool_size"`
 	RateLimit           RateLimitConf `yaml:"rate_limit"`
 	HTTP                HTTPConf      `yaml:"http"`
-	DatabaseDriver      string        `yaml:"database_driver"` // "scylladb" or "postgres"
-	ScyllaDB            ScyllaDBConf  `yaml:"scylladb"`
-	Postgres            PostgresConf  `yaml:"postgres"`
+	// DatabaseDriver is optional; only "postgres" is supported (default when empty).
+	DatabaseDriver string       `yaml:"database_driver,omitempty"`
+	Postgres       PostgresConf `yaml:"postgres"`
 }
 
 // RateLimitConf configures the rate limiter.
@@ -40,17 +40,6 @@ type HTTPConf struct {
 	MaxRetries int `yaml:"max_retries"`
 }
 
-// ScyllaDBConf configures ScyllaDB connection.
-type ScyllaDBConf struct {
-	Hosts             []string `yaml:"hosts"`
-	Keyspace          string   `yaml:"keyspace"`
-	ReplicationFactor int      `yaml:"replication_factor"`
-	Consistency       string   `yaml:"consistency"`
-	TimeoutSeconds    int      `yaml:"timeout_seconds"`
-	MaxRetries        int      `yaml:"max_retries"`
-	TTLDays           int      `yaml:"ttl_days"`
-}
-
 // PostgresConf configures PostgreSQL connection.
 type PostgresConf struct {
 	Host     string `yaml:"host"`
@@ -66,16 +55,6 @@ type PostgresConf struct {
 // Timeout returns the HTTP timeout as a time.Duration.
 func (h *HTTPConf) Timeout() time.Duration {
 	return time.Duration(h.TimeoutSeconds) * time.Second
-}
-
-// Timeout returns the ScyllaDB timeout as a time.Duration.
-func (s *ScyllaDBConf) Timeout() time.Duration {
-	return time.Duration(s.TimeoutSeconds) * time.Second
-}
-
-// TTLSeconds returns the TTL in seconds for ScyllaDB.
-func (s *ScyllaDBConf) TTLSeconds() int {
-	return s.TTLDays * 24 * 60 * 60
 }
 
 // SlotDuration returns the effective slot duration.
@@ -122,16 +101,8 @@ func (c *Config) validate() error {
 	if len(c.Validators) == 0 {
 		return fmt.Errorf("at least one validator index is required")
 	}
-	// Database configuration validation based on selected driver.
 	switch c.DatabaseDriver {
-	case "", "scylladb":
-		if len(c.ScyllaDB.Hosts) == 0 {
-			return fmt.Errorf("at least one scylladb host is required")
-		}
-		if c.ScyllaDB.Keyspace == "" {
-			return fmt.Errorf("scylladb keyspace is required")
-		}
-	case "postgres":
+	case "", "postgres":
 		if c.Postgres.Host == "" {
 			return fmt.Errorf("postgres host is required")
 		}
@@ -144,8 +115,10 @@ func (c *Config) validate() error {
 		if c.Postgres.Database == "" {
 			return fmt.Errorf("postgres database is required")
 		}
+	case "scylladb":
+		return fmt.Errorf("database_driver \"scylladb\" is no longer supported; use postgres only")
 	default:
-		return fmt.Errorf("unsupported database_driver: %s", c.DatabaseDriver)
+		return fmt.Errorf("unsupported database_driver: %s (only postgres is supported)", c.DatabaseDriver)
 	}
 	return nil
 }
@@ -174,22 +147,7 @@ func (c *Config) setDefaults() {
 		c.HTTP.MaxRetries = 3
 	}
 	if c.DatabaseDriver == "" {
-		c.DatabaseDriver = "scylladb"
-	}
-	if c.ScyllaDB.ReplicationFactor <= 0 {
-		c.ScyllaDB.ReplicationFactor = 3
-	}
-	if c.ScyllaDB.Consistency == "" {
-		c.ScyllaDB.Consistency = "local_quorum"
-	}
-	if c.ScyllaDB.TimeoutSeconds <= 0 {
-		c.ScyllaDB.TimeoutSeconds = 10
-	}
-	if c.ScyllaDB.MaxRetries <= 0 {
-		c.ScyllaDB.MaxRetries = 3
-	}
-	if c.ScyllaDB.TTLDays <= 0 {
-		c.ScyllaDB.TTLDays = 90
+		c.DatabaseDriver = "postgres"
 	}
 	if c.Postgres.Port == 0 {
 		c.Postgres.Port = 5432

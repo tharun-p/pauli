@@ -1,6 +1,6 @@
 # Pauli - Ethereum Validator Indexing Service
 
-`pauli` indexes validator data from a Beacon Node and persists it to **ScyllaDB/Cassandra** or **PostgreSQL** 
+`pauli` indexes validator data from a Beacon Node and persists it to **PostgreSQL**.
 
 This project is a data indexing service for validator operations. It is **not** a governance framework or protocol decision system.
 
@@ -16,7 +16,7 @@ This project is a data indexing service for validator operations. It is **not** 
 ## Requirements
 
 - Go `1.24+`
-- One of: **ScyllaDB/Cassandra** or **PostgreSQL** (16+ is typical)
+- **PostgreSQL** (16+ is typical)
 - Access to an Ethereum Beacon Node API (Lighthouse, Prysm, Teku, etc.)
 
 ## Quick Start
@@ -30,9 +30,7 @@ go build -o validator-monitor .
 
 ## Config
 
-Set `database_driver` to `"scylladb"` (default if omitted) or `"postgres"`. Only the block for the active driver needs to match your environment; you can keep both in one file for switching.
-
-**ScyllaDB / Cassandra**
+`database_driver` defaults to `postgres` when omitted. ScyllaDB/Cassandra is not supported.
 
 ```yaml
 beacon_node_url: "http://localhost:5052"
@@ -51,39 +49,7 @@ http:
   max_idle_conns: 100
   max_retries: 3
 
-database_driver: "scylladb" # or omit; empty defaults to scylladb
-
-scylladb:
-  hosts:
-    - "127.0.0.1:9042"
-  keyspace: "validator_monitor"
-  replication_factor: 3
-  consistency: "local_quorum"
-  timeout_seconds: 10
-  max_retries: 3
-  ttl_days: 90
-```
-
-**PostgreSQL**
-
-```yaml
-beacon_node_url: "http://localhost:5052"
-validators:
-  - 12345
-  - 67890
-polling_interval_slots: 1
-worker_pool_size: 10
-
-rate_limit:
-  requests_per_second: 50
-  burst: 100
-
-http:
-  timeout_seconds: 30
-  max_idle_conns: 100
-  max_retries: 3
-
-database_driver: "postgres"
+database_driver: "postgres" # optional; default is postgres
 
 postgres:
   host: "127.0.0.1"
@@ -96,7 +62,7 @@ postgres:
   ttl_days: 90
 ```
 
-A full example with both backends is in `config.yaml`. For local Postgres, see `docker.compose.postgres`.
+A fuller sample is in `config.example.yaml`. For local Postgres, see `docker.compose.postgres`.
 
 ## Run Options
 
@@ -171,7 +137,7 @@ flowchart LR
     F --> G[Worker pool]
     G --> H[RunAsync → Beacon API]
     G --> I[RunAsync → Repository]
-    I --> J[(ScyllaDB or Postgres)]
+    I --> J[(PostgreSQL)]
 ```
 
 ## Project Layout
@@ -193,12 +159,10 @@ pauli/
 │   │   └── steps/            # Step, Env, Job
 │   │       └── steps/realtime/  # concrete indexing steps
 │   ├── storage/              # Store/Repository interfaces + models
-│   ├── storage/scylladb/
 │   ├── storage/postgres/
-│   └── store/                # picks backend from database_driver
+│   └── store/                # wires PostgreSQL store
 ├── sql/
-│   ├── migrations/           # CQL for Scylla
-│   └── migrations_pg/      # SQL for Postgres
+│   └── migrations_pg/        # SQL migrations
 └── pkg/
     └── backoff/              # retry/backoff utility
 ```
@@ -206,7 +170,7 @@ pauli/
 ## Notes
 
 - Built for validator indexing and operational visibility
-- **Beacon HTTP retries** use **`http.max_retries`** (default 3). **`scylladb.max_retries`** applies only to the Scylla/Cassandra driver, not the beacon client.
+- **Beacon HTTP retries** use **`http.max_retries`** (default 3).
 - Uses rate limiting and exponential backoff to reduce node/API pressure
 - Supports Max Effective Balance flows (EIP-7251 context) through Beacon data indexing
 - **Architecture detail:** `doc/monitor-e2e-flow.md` matches the current monitor implementation; treat it as the source of truth for control flow
