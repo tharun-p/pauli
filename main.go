@@ -18,7 +18,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
-	debug := flag.Bool("debug", false, "Enable debug logging")
+	debug := flag.Bool("debug", false, "Verbose debug logging (default: info/warn/error for operations)")
 	flag.Parse()
 
 	setupLogger(*debug)
@@ -76,11 +76,11 @@ func main() {
 
 	synced, err := beaconClient.IsNodeSynced(ctx)
 	if err != nil {
-		log.Debug().Err(err).Msg("beacon sync check failed")
+		log.Error().Err(err).Msg("beacon sync check failed")
 	} else if synced {
 		log.Debug().Msg("beacon node synced")
 	} else {
-		log.Debug().Msg("beacon node still syncing")
+		log.Warn().Msg("beacon node still syncing")
 	}
 
 	if len(cfg.Validators) > 0 {
@@ -92,7 +92,7 @@ func main() {
 
 		validator, err := beaconClient.GetValidator(testCtx2, "head", testValidator)
 		if err != nil {
-			log.Debug().Err(err).Uint64("validator_index", testValidator).Msg("test validator fetch failed")
+			log.Warn().Err(err).Uint64("validator_index", testValidator).Msg("test validator fetch failed")
 		} else {
 			log.Debug().
 				Uint64("validator_index", testValidator).
@@ -109,10 +109,14 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to start monitor")
 	}
 
-	log.Debug().Msg("running; Ctrl+C to stop")
+	log.Info().
+		Str("beacon_url", cfg.BeaconNodeURL).
+		Int("validators", len(cfg.Validators)).
+		Str("database_driver", cfg.DatabaseDriver).
+		Msg("pauli running; Ctrl+C to stop (-debug for verbose logs)")
 
 	sig := <-sigChan
-	log.Debug().Str("signal", sig.String()).Msg("shutdown signal")
+	log.Info().Str("signal", sig.String()).Msg("shutdown initiated")
 
 	cancel()
 
@@ -121,15 +125,15 @@ func main() {
 
 	done := make(chan struct{})
 	go func() {
-		mon.Stop()
+		mon.Stop(shutdownCtx)
 		close(done)
 	}()
 
 	select {
 	case <-done:
-		log.Debug().Msg("shutdown complete")
+		log.Info().Msg("shutdown complete")
 	case <-shutdownCtx.Done():
-		log.Debug().Msg("shutdown timed out")
+		log.Warn().Msg("shutdown timed out")
 	}
 }
 
@@ -137,8 +141,8 @@ func setupLogger(debug bool) {
 	if debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {
-		// Only fatal errors print when -debug is off (no operational logging).
-		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+		// Info: lifecycle (start/stop). Warn: recoverable probes. Error: indexing / runner failures.
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 
 	zerolog.TimeFieldFormat = time.RFC3339

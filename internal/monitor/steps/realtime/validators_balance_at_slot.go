@@ -41,7 +41,7 @@ func runValidatorSnapshots(ctx context.Context, client *beacon.Client, repo stor
 
 	validatorsResp, err := client.GetValidatorsAtSlot(ctx, slot, validators)
 	if err != nil {
-		log.Debug().Err(err).Uint64("slot", slot).Msg("fetch validators at slot failed")
+		log.Error().Err(err).Uint64("slot", slot).Msg("fetch validators at slot failed")
 		return fmt.Errorf("failed to fetch validators at slot %d: %w", slot, err)
 	}
 
@@ -73,7 +73,9 @@ func runValidatorSnapshots(ctx context.Context, client *beacon.Client, repo stor
 	}
 
 	if len(snapshots) == 0 {
-		return fmt.Errorf("no snapshots built for slot %d (requested %d validators)", slot, len(validators))
+		err := fmt.Errorf("no snapshots built for slot %d (requested %d validators)", slot, len(validators))
+		log.Error().Err(err).Uint64("slot", slot).Int("validators_requested", len(validators)).Msg("validator snapshot batch empty")
+		return err
 	}
 
 	log.Debug().
@@ -82,7 +84,7 @@ func runValidatorSnapshots(ctx context.Context, client *beacon.Client, repo stor
 		Msg("saving validator snapshots batch")
 
 	if err := repo.SaveValidatorSnapshots(ctx, snapshots); err != nil {
-		log.Debug().Err(err).Uint64("slot", slot).Int("count", len(snapshots)).Msg("save validator snapshots failed")
+		log.Error().Err(err).Uint64("slot", slot).Int("count", len(snapshots)).Msg("save validator snapshots failed")
 		return fmt.Errorf("failed to save snapshots: %w", err)
 	}
 

@@ -40,7 +40,7 @@ func (s AttestationRewardsAtBoundary) RunAsync(ctx context.Context, e *steps.Env
 func runAttestationRewards(ctx context.Context, client *beacon.Client, repo storage.Repository, validators []uint64, epoch, epochStartSlot uint64, log zerolog.Logger) error {
 	resp, err := client.GetAttestationRewards(ctx, epoch, validators)
 	if err != nil {
-		log.Debug().Err(err).Uint64("epoch", epoch).Msg("fetch attestation rewards failed")
+		log.Error().Err(err).Uint64("epoch", epoch).Msg("fetch attestation rewards failed")
 		return err
 	}
 
@@ -75,7 +75,7 @@ func runAttestationRewards(ctx context.Context, client *beacon.Client, repo stor
 	}
 
 	if err := repo.SaveAttestationRewards(ctx, rewards); err != nil {
-		log.Debug().Err(err).Uint64("epoch", epoch).Int("rewards_count", len(rewards)).Msg("save attestation rewards failed")
+		log.Error().Err(err).Uint64("epoch", epoch).Int("rewards_count", len(rewards)).Msg("save attestation rewards failed")
 		return fmt.Errorf("failed to save rewards: %w", err)
 	}
 
@@ -86,7 +86,7 @@ func runAttestationRewards(ctx context.Context, client *beacon.Client, repo stor
 
 	for _, penalty := range penalties {
 		if err := repo.SaveValidatorPenalty(ctx, penalty); err != nil {
-			log.Debug().Err(err).Uint64("validator_index", penalty.ValidatorIndex).Msg("save validator penalty failed")
+			log.Error().Err(err).Uint64("validator_index", penalty.ValidatorIndex).Msg("save validator penalty failed")
 		}
 	}
 

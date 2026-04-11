@@ -76,6 +76,10 @@ http:
   # Higher values improve performance for many validators
   max_idle_conns: 100
 
+  # Retries for beacon HTTP requests (timeouts, 429, 503, etc.)
+  # Separate from scylladb.max_retries (database driver)
+  max_retries: 3
+
 # -----------------------------------------------------------------------------
 # DATABASE
 # -----------------------------------------------------------------------------
@@ -171,6 +175,7 @@ postgres:
 # http:
 #   timeout_seconds: 60
 #   max_idle_conns: 200
+#   max_retries: 5
 # scylladb:
 #   hosts:
 #     - "scylla-1.internal:9042"

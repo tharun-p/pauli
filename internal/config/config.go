@@ -31,10 +31,13 @@ type RateLimitConf struct {
 	Burst             int     `yaml:"burst"`
 }
 
-// HTTPConf configures the HTTP client.
+// HTTPConf configures the HTTP client (beacon REST API).
 type HTTPConf struct {
 	TimeoutSeconds int `yaml:"timeout_seconds"`
 	MaxIdleConns   int `yaml:"max_idle_conns"`
+	// MaxRetries is the maximum number of retries after a failed attempt (timeouts, 429, 503, etc.).
+	// Applied by the beacon client only; not related to database drivers.
+	MaxRetries int `yaml:"max_retries"`
 }
 
 // ScyllaDBConf configures ScyllaDB connection.
@@ -166,6 +169,9 @@ func (c *Config) setDefaults() {
 	}
 	if c.HTTP.MaxIdleConns <= 0 {
 		c.HTTP.MaxIdleConns = 100
+	}
+	if c.HTTP.MaxRetries <= 0 {
+		c.HTTP.MaxRetries = 3
 	}
 	if c.DatabaseDriver == "" {
 		c.DatabaseDriver = "scylladb"

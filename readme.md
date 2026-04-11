@@ -10,7 +10,7 @@ This project is a data indexing service for validator operations. It is **not** 
 - Writes **validator snapshots** at the current head slot (async workers)
 - Plans **duties** and **rewards** epochs at **slot/epoch boundaries** and indexes them when scheduled (async workers)
 - Persists indexed records to the configured backend (TTL / retention via `ttl_days` where applicable)
-- Optional **debug** logging (`-debug`); default run is quiet except fatal errors
+- Default logs **info** (lifecycle), **warn** (probes / sync), and **errors** (indexing, beacon, runner); use **`-debug`** for verbose request/step logging
 - **No historical catch-up** yet: one realtime pass per poll, not a multi-slot reconciliation cursor
 
 ## Requirements
@@ -46,6 +46,11 @@ rate_limit:
   requests_per_second: 50
   burst: 100
 
+http:
+  timeout_seconds: 30
+  max_idle_conns: 100
+  max_retries: 3
+
 database_driver: "scylladb" # or omit; empty defaults to scylladb
 
 scylladb:
@@ -72,6 +77,11 @@ worker_pool_size: 10
 rate_limit:
   requests_per_second: 50
   burst: 100
+
+http:
+  timeout_seconds: 30
+  max_idle_conns: 100
+  max_retries: 3
 
 database_driver: "postgres"
 
@@ -196,6 +206,7 @@ pauli/
 ## Notes
 
 - Built for validator indexing and operational visibility
+- **Beacon HTTP retries** use **`http.max_retries`** (default 3). **`scylladb.max_retries`** applies only to the Scylla/Cassandra driver, not the beacon client.
 - Uses rate limiting and exponential backoff to reduce node/API pressure
 - Supports Max Effective Balance flows (EIP-7251 context) through Beacon data indexing
 - **Architecture detail:** `doc/monitor-e2e-flow.md` matches the current monitor implementation; treat it as the source of truth for control flow

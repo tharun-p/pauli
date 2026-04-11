@@ -20,7 +20,7 @@ func initBeaconNetworkClock(ctx context.Context, client *beacon.Client, network 
 
 	checkpoints, err := client.GetFinalityCheckpoints(ctx, "head")
 	if err != nil {
-		log.Debug().Err(err).Msg("beacon init: finality checkpoints unavailable")
+		log.Warn().Err(err).Msg("beacon init: finality checkpoints unavailable")
 	} else {
 		log.Debug().
 			Uint64("initial_finalized_epoch", checkpoints.Finalized.Epoch.Uint64()).
@@ -38,10 +38,10 @@ func (m *Monitor) logNodeSyncStatus(ctx context.Context) {
 	// Check node sync status.
 	synced, err := m.client.IsNodeSynced(ctx)
 	if err != nil {
-		m.logger.Debug().Err(err).Msg("node sync status check failed")
+		m.logger.Error().Err(err).Msg("node sync status check failed")
 		return
 	}
 	if !synced {
-		m.logger.Debug().Msg("beacon node still syncing")
+		m.logger.Warn().Msg("beacon node still syncing")
 	}
 }

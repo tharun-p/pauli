@@ -43,7 +43,7 @@ func runAttesterDuties(ctx context.Context, client *beacon.Client, repo storage.
 
 	resp, err := client.GetAttesterDuties(ctx, epoch, validators)
 	if err != nil {
-		log.Debug().Err(err).Uint64("epoch", epoch).Msg("fetch attestation duties failed")
+		log.Error().Err(err).Uint64("epoch", epoch).Msg("fetch attestation duties failed")
 		return fmt.Errorf("failed to fetch duties for epoch %d: %w", epoch, err)
 	}
 
@@ -76,7 +76,7 @@ func runAttesterDuties(ctx context.Context, client *beacon.Client, repo storage.
 		Msg("saving attestation duties")
 
 	if err := repo.SaveAttestationDuties(ctx, duties); err != nil {
-		log.Debug().Err(err).Uint64("epoch", epoch).Int("duties_count", len(duties)).Msg("save attestation duties failed")
+		log.Error().Err(err).Uint64("epoch", epoch).Int("duties_count", len(duties)).Msg("save attestation duties failed")
 		return fmt.Errorf("failed to save duties: %w", err)
 	}
 

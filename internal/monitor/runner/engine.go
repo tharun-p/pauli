@@ -38,13 +38,13 @@ func (engine *engine) run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Debug().Err(err).Msg("before-step failed")
+			log.Error().Err(err).Msg("before-step failed")
 			continue
 		}
 
 		chain, stop, err := engine.runner.StepChain(ctx)
 		if err != nil {
-			log.Debug().Err(err).Msg("step chain failed")
+			log.Error().Err(err).Msg("step chain failed")
 			if pauseOrExit(ctx, engine.runner.SleepOnSeedError()) {
 				return
 			}
@@ -69,7 +69,7 @@ func (engine *engine) run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Debug().Err(err).Msg("after-step failed")
+			log.Error().Err(err).Msg("after-step failed")
 		}
 	}
 }
@@ -78,7 +78,7 @@ func (engine *engine) runStepChain(ctx context.Context, log zerolog.Logger, env 
 	for _, step := range chain {
 		enqueue, err := step.Run(env)
 		if err != nil {
-			log.Debug().Err(err).Msg("step failed")
+			log.Error().Err(err).Msg("step failed")
 			if errDelay > 0 && pauseOrExit(ctx, errDelay) {
 				return true
 			}
@@ -92,7 +92,7 @@ func (engine *engine) runStepChain(ctx context.Context, log zerolog.Logger, env 
 			if ctx.Err() != nil {
 				return true
 			}
-			log.Debug().Err(err).Msg("enqueue failed")
+			log.Error().Err(err).Msg("enqueue failed")
 			if errDelay > 0 && pauseOrExit(ctx, errDelay) {
 				return true
 			}

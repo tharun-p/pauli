@@ -55,7 +55,7 @@ func (m *Monitor) Start(ctx context.Context) error {
 
 	m.startBackgroundWorker(ctx, func(runCtx context.Context) { realtimeR.Start(runCtx) })
 
-	m.logger.Debug().
+	m.logger.Info().
 		Int("validators", len(m.cfg.Validators)).
 		Int("workers", m.cfg.WorkerPoolSize).
 		Msg("monitor started")
@@ -71,12 +71,16 @@ func (m *Monitor) startBackgroundWorker(ctx context.Context, run func(context.Co
 	}()
 }
 
-// Stop gracefully shuts down the monitor.
-func (m *Monitor) Stop() {
-	m.logger.Debug().Msg("monitor stopping")
-	m.pool.Stop()
+// Stop shuts down the monitor: waits for the realtime runner to exit (caller should cancel its context first),
+// then drains the worker pool using drainCtx for in-flight and queued jobs.
+func (m *Monitor) Stop(drainCtx context.Context) {
+	if drainCtx == nil {
+		drainCtx = context.Background()
+	}
+	m.logger.Info().Msg("monitor stopping")
 	m.wg.Wait()
-	m.logger.Debug().Msg("monitor stopped")
+	m.pool.Stop(drainCtx)
+	m.logger.Info().Msg("monitor stopped")
 }
 
 // Wait blocks until the monitor is stopped.

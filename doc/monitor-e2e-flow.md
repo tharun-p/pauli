@@ -1,6 +1,6 @@
 # Monitor E2E Interaction Flow
 
-Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing, **lastEpoch** for boundary dedup, and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — **sync** steps run entirely on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**. Historical catch-up / backfill is **not** implemented yet. Operational detail is **debug-only** (`-debug`).
+Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing, **lastEpoch** for boundary dedup, and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — **sync** steps run entirely on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**. Historical catch-up / backfill is **not** implemented yet. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
 
 ```mermaid
 flowchart TD
@@ -22,10 +22,10 @@ flowchart TD
   Process --> Snap["snapshots / duties / rewards"]
   Snap --> Repo[repo Save* methods]
 
-  Stop["Monitor.Stop()"] --> CloseJobs["pool.Stop close workChan"]
-  CloseJobs --> WaitWorkers[wait worker goroutines]
-  WaitWorkers --> WaitAll["monitor wg.Wait"]
-  WaitAll --> endNode[Monitor stopped]
+  Stop["Monitor.Stop(drainCtx)"] --> WaitRt["monitor wg.Wait: realtime runner exits"]
+  WaitRt --> CloseJobs["pool.Stop(drainCtx): set drain runCtx, close workChan"]
+  CloseJobs --> WaitWorkers["pool wg.Wait: drain queued jobs"]
+  WaitWorkers --> endNode[Monitor stopped]
 ```
 
 ## Realtime monitoring (single linear flow)
@@ -83,9 +83,10 @@ flowchart LR
 
 1. Workers dequeue **`steps.Job`**.
 2. **`Step.RunAsync(ctx, &job.Env)`** runs the async body (snapshots, duties, or rewards in `internal/monitor/steps/realtime`).
-3. Data is written through `storage.Repository` (failures at debug log with `-debug`).
+3. Data is written through `storage.Repository` (failures log at **error** by default; more detail with `-debug`).
 
 ## Shutdown
 
-1. `Monitor.Stop()` → `pool.Stop()`.
-2. Workers exit; `wg.Wait()` for the realtime runner goroutine.
+1. Cancel the monitor **context** (stops the realtime runner loop; no further `Enqueue`).
+2. `Monitor.Stop(drainCtx)` waits for the **realtime runner** goroutine, then `pool.Stop(drainCtx)`.
+3. The pool sets **`runCtx` to `drainCtx`**, **closes `workChan`**, and workers **drain the buffer** (they no longer exit early on the cancelled monitor context). **`RunAsync`** uses **`drainCtx`** so work can finish or abort when the shutdown deadline fires.
