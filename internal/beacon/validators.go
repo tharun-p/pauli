@@ -6,6 +6,10 @@ import (
 	"strconv"
 )
 
+// MaxValidatorIDsPerGetValidators limits how many validator indices are sent in one
+// GET /eth/v1/beacon/states/.../validators?id=... request to avoid oversized URLs.
+const MaxValidatorIDsPerGetValidators = 100
+
 // GetValidator fetches a single validator's state.
 // stateID can be "head", "genesis", "finalized", "justified", a slot number, or a state root.
 // validatorID can be a validator index or a public key.
@@ -61,6 +65,28 @@ func (c *Client) GetValidators(ctx context.Context, stateID string, validatorIDs
 	}
 
 	return resp.Data, nil
+}
+
+// GetValidatorsAtSlot fetches the given validators' state at slot in one or more
+// chunked GET requests (see MaxValidatorIDsPerGetValidators).
+func (c *Client) GetValidatorsAtSlot(ctx context.Context, slot uint64, validatorIDs []uint64) ([]Validator, error) {
+	if len(validatorIDs) == 0 {
+		return nil, nil
+	}
+	stateID := strconv.FormatUint(slot, 10)
+	var out []Validator
+	for i := 0; i < len(validatorIDs); i += MaxValidatorIDsPerGetValidators {
+		end := i + MaxValidatorIDsPerGetValidators
+		if end > len(validatorIDs) {
+			end = len(validatorIDs)
+		}
+		part, err := c.GetValidators(ctx, stateID, validatorIDs[i:end])
+		if err != nil {
+			return nil, fmt.Errorf("validators at slot %d (chunk %d-%d): %w", slot, i, end, err)
+		}
+		out = append(out, part...)
+	}
+	return out, nil
 }
 
 // GetValidatorsByStatus fetches validators filtered by status.

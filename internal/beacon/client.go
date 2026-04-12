@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -55,13 +56,23 @@ func NewClient(cfg *config.Config) *Client {
 		apiKey:     cfg.BeaconAPIKey,
 		httpClient: httpClient,
 		limiter:    limiter,
-		maxRetries: cfg.ScyllaDB.MaxRetries,
+		maxRetries: cfg.HTTP.MaxRetries,
 	}
 }
 
 // doRequest performs an HTTP request with rate limiting and retries.
-func (c *Client) doRequest(ctx context.Context, method, path string, result interface{}) error {
+// body is JSON-encoded once and re-read per attempt so retries are safe. Pass nil for GET.
+func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, result interface{}) error {
 	url := c.baseURL + path
+
+	var bodyJSON []byte
+	if body != nil {
+		var err error
+		bodyJSON, err = json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to encode request body: %w", err)
+		}
+	}
 
 	var lastErr error
 	b := backoff.NewDefault()
@@ -79,14 +90,20 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 			return fmt.Errorf("rate limiter error: rate: Wait(n=1) exceeded timeout: %w", err)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, method, url, nil)
+		var reqBody io.Reader
+		if len(bodyJSON) > 0 {
+			reqBody = bytes.NewReader(bodyJSON)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 		if err != nil {
 			return fmt.Errorf("failed to create request: %w", err)
 		}
 
-		// Set standard headers
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("Content-Type", "application/json")
+		if len(bodyJSON) > 0 {
+			req.Header.Set("Content-Type", "application/json")
+		}
 
 		// Set API key if provided (for providers like Tatum)
 		if c.apiKey != "" {
@@ -103,141 +120,111 @@ func (c *Client) doRequest(ctx context.Context, method, path string, result inte
 		if err != nil {
 			lastErr = err
 			if attempt < c.maxRetries {
-				log.Warn().Err(err).Str("url", url).Int("attempt", attempt+1).Msg("Request failed, retrying")
+				log.Debug().Err(err).Str("url", url).Int("attempt", attempt+1).Msg("request failed, retrying")
 				if !b.Wait(ctx) {
 					return ctx.Err()
 				}
 				continue
 			}
+			log.Error().Err(err).Str("url", url).Int("attempts", attempt+1).Msg("beacon request failed after retries")
 			return fmt.Errorf("request failed after %d attempts: %w", attempt+1, err)
 		}
 
-		defer resp.Body.Close()
-
-		// Check for retryable errors
-		if backoff.ShouldRetry(resp.StatusCode) {
-			body, _ := io.ReadAll(resp.Body)
-			lastErr = &backoff.RetryableError{
-				StatusCode: resp.StatusCode,
-				Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)),
-			}
-
-			log.Warn().
+		retry, err := c.readDoRequestResponse(resp, method, path, result)
+		if retry {
+			lastErr = err
+			log.Debug().
 				Int("status", resp.StatusCode).
 				Str("url", url).
 				Int("attempt", attempt+1).
-				Msg("Retryable error, backing off")
-
+				Msg("retryable HTTP error, backing off")
 			if attempt < c.maxRetries {
 				if !b.Wait(ctx) {
 					return ctx.Err()
 				}
 				continue
 			}
-			return lastErr
+			log.Error().Err(err).Str("url", url).Int("status", resp.StatusCode).Msg("beacon retryable error, retries exhausted")
+			return err
 		}
-
-		// Read response body once
-		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to read response body: %w", err)
+			return err
 		}
-
-		// Check for other errors
-		if resp.StatusCode != http.StatusOK {
-			bodyPreview := string(bodyBytes)
-			if len(bodyPreview) > 200 {
-				bodyPreview = bodyPreview[:200] + "..."
-			}
-			return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, bodyPreview)
-		}
-
-		log.Debug().
-			Str("method", method).
-			Str("path", path).
-			Int("status", resp.StatusCode).
-			Int("body_size", len(bodyBytes)).
-			Str("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).
-			Msg("Beacon API response received")
-
-		// Decode response
-		if err := json.Unmarshal(bodyBytes, result); err != nil {
-			log.Error().
-				Err(err).
-				Str("body", string(bodyBytes[:min(500, len(bodyBytes))])).
-				Msg("Failed to decode response")
-			return fmt.Errorf("failed to decode response: %w", err)
-		}
-
-		log.Debug().
-			Str("method", method).
-			Str("path", path).
-			Int("status", resp.StatusCode).
-			Msg("Beacon API request successful and parsed")
-
 		return nil
 	}
 
 	return lastErr
 }
 
+// readDoRequestResponse reads and closes resp.Body exactly once. If retry is true, err is a *backoff.RetryableError and the caller may re-issue the request after backoff.
+func (c *Client) readDoRequestResponse(resp *http.Response, method, path string, result interface{}) (retry bool, err error) {
+	defer resp.Body.Close()
+
+	if backoff.ShouldRetry(resp.StatusCode) {
+		b, _ := io.ReadAll(resp.Body)
+		return true, &backoff.RetryableError{
+			StatusCode: resp.StatusCode,
+			Message:    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(b)),
+		}
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Error().Err(err).Str("path", path).Msg("beacon response body read failed")
+		return false, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyPreview := string(bodyBytes)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		log.Error().
+			Int("status", resp.StatusCode).
+			Str("path", path).
+			Str("body_preview", bodyPreview).
+			Msg("beacon API non-success status")
+		return false, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, bodyPreview)
+	}
+
+	log.Debug().
+		Str("method", method).
+		Str("path", path).
+		Int("status", resp.StatusCode).
+		Int("body_size", len(bodyBytes)).
+		Str("body_preview", string(bodyBytes[:min(200, len(bodyBytes))])).
+		Msg("Beacon API response received")
+
+	if result == nil {
+		return false, nil
+	}
+
+	if err := json.Unmarshal(bodyBytes, result); err != nil {
+		log.Error().
+			Err(err).
+			Str("path", path).
+			Str("body", string(bodyBytes[:min(500, len(bodyBytes))])).
+			Msg("failed to decode beacon response")
+		return false, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	log.Debug().
+		Str("method", method).
+		Str("path", path).
+		Int("status", resp.StatusCode).
+		Msg("Beacon API request successful and parsed")
+
+	return false, nil
+}
+
 // get performs a GET request.
 func (c *Client) get(ctx context.Context, path string, result interface{}) error {
-	return c.doRequest(ctx, http.MethodGet, path, result)
+	return c.doRequest(ctx, http.MethodGet, path, nil, result)
 }
 
 // post performs a POST request with a JSON body.
 func (c *Client) post(ctx context.Context, path string, body interface{}, result interface{}) error {
-	return c.doRequestWithBody(ctx, http.MethodPost, path, body, result)
-}
-
-// doRequestWithBody performs an HTTP request with a JSON body.
-func (c *Client) doRequestWithBody(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	url := c.baseURL + path
-
-	// Wait for rate limiter
-	if err := c.limiter.Wait(ctx); err != nil {
-		return fmt.Errorf("rate limiter error: %w", err)
-	}
-
-	var bodyReader io.Reader
-	if body != nil {
-		pr, pw := io.Pipe()
-		go func() {
-			err := json.NewEncoder(pw).Encode(body)
-			pw.CloseWithError(err)
-		}()
-		bodyReader = pr
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	if result != nil {
-		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
-			return fmt.Errorf("failed to decode response: %w", err)
-		}
-	}
-
-	return nil
+	return c.doRequest(ctx, http.MethodPost, path, body, result)
 }
 
 // Close releases resources held by the client.

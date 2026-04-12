@@ -3,111 +3,62 @@ package monitor
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/tharun/pauli/internal/beacon"
 	"github.com/tharun/pauli/internal/config"
-	monitorcache "github.com/tharun/pauli/internal/monitor/cache"
-	"github.com/tharun/pauli/internal/monitor/dispatch"
-	"github.com/tharun/pauli/internal/monitor/jobs"
-	"github.com/tharun/pauli/internal/monitor/runners/realtime"
-	"github.com/tharun/pauli/internal/monitor/runners/reconcile"
-	scheduler "github.com/tharun/pauli/internal/monitor/scheduler"
+	"github.com/tharun/pauli/internal/monitor/queue"
+	runrealtime "github.com/tharun/pauli/internal/monitor/runner/realtime"
 	"github.com/tharun/pauli/internal/storage"
 )
 
-const headSlotCacheTTL = 6 * time.Second
-
-// Monitor orchestrates the validator monitoring process.
+// Monitor wires the network clock, runners, and a concurrent queue (workers run steps.Job via Step.RunAsync).
+// Indexing uses runner/realtime.Runner (runner.Runner) only; historical backfill can be added later.
 type Monitor struct {
-	cfg        *config.Config
-	client     *beacon.Client
-	repo       storage.Repository
-	scheduler  *scheduler.Scheduler
-	realtime   *realtime.Runner
-	reconciler *reconcile.Runner
-	dispatcher *dispatch.Dispatcher
-	headSlot   *monitorcache.HeadSlotCache
-	workerPool *WorkerPool
-	logger     zerolog.Logger
-	wg         sync.WaitGroup
+	cfg               *config.Config
+	client            *beacon.Client
+	repo              storage.Repository
+	network *config.BlockchainNetwork
+	pool    *queue.Pool
+	logger            zerolog.Logger
+	wg                sync.WaitGroup
 }
 
 // NewMonitor creates a new Monitor instance.
 func NewMonitor(cfg *config.Config, client *beacon.Client, repo storage.Repository, logger zerolog.Logger) *Monitor {
+	network := config.NewBlockchainNetwork(cfg)
 	m := &Monitor{
-		cfg:       cfg,
-		client:    client,
-		repo:      repo,
-		scheduler: scheduler.New(client, cfg.Validators, cfg.PollingIntervalSlots, cfg.SlotDuration(), logger),
-		logger:    logger,
+		cfg:     cfg,
+		client:  client,
+		repo:    repo,
+		network: network,
+		logger:  logger,
 	}
 
-	m.initWorkers()
-	m.initCache()
-	m.initRunners()
+	m.pool = queue.NewPool(cfg.WorkerPoolSize, queue.StepJobRunner(), logger)
+
 	return m
-}
-
-func (m *Monitor) initWorkers() {
-	jobProcessor := jobs.NewProcessor(m.client, m.repo, m.cfg.Validators, m.logger)
-	m.workerPool = NewWorkerPool(m.cfg.WorkerPoolSize, jobProcessor, m.logger)
-	m.dispatcher = dispatch.New(m.cfg.Validators, m.workerPool.Submit, m.logger)
-}
-
-func (m *Monitor) initCache() {
-	m.headSlot = monitorcache.NewHeadSlotCache(
-		headSlotCacheTTL,
-		func(ctx context.Context) (uint64, error) {
-			return m.client.GetHeadSlot(ctx)
-		},
-		m.logger,
-	)
-}
-
-func (m *Monitor) initRunners() {
-	m.reconciler = reconcile.New(
-		m.cfg.Validators,
-		m.headSlot.Get,
-		m.getFinalizedEpoch,
-		m.waitForSlotInterval,
-		m.dispatcher.PollValidatorsForSlotEpoch,
-		m.dispatcher.FetchDutiesForEpoch,
-		m.dispatcher.FetchRewardsForEpoch,
-		m.logger,
-	)
-	m.realtime = realtime.New(
-		m.waitForSlotInterval,
-		m.headSlot.Get,
-		m.handleRealtimeSlot,
-		m.logger,
-	)
 }
 
 // Start begins the monitoring loop.
 func (m *Monitor) Start(ctx context.Context) error {
-	// Initialize scheduler with genesis time
-	if err := m.scheduler.Initialize(ctx); err != nil {
+	if err := initBeaconNetworkClock(ctx, m.client, m.network, m.logger); err != nil {
 		return err
 	}
 
 	m.logNodeSyncStatus(ctx)
 
-	// Initialize reconciliation cursors, then start backfill in parallel.
-	m.reconciler.InitializeCursors(ctx)
+	enqueue := m.pool.Enqueue
+	realtimeR := runrealtime.New(m.network, m.client, m.repo, m.client.GetHeadSlot, m.cfg.Validators, m.logger, enqueue)
 
-	// Start worker pool
-	m.workerPool.Start(ctx)
+	m.pool.Start(ctx)
 
-	m.startBackgroundWorker(ctx, func(runCtx context.Context) { m.processResults(runCtx) })
-	m.startBackgroundWorker(ctx, func(runCtx context.Context) { m.realtime.Run(runCtx) })
-	m.startBackgroundWorker(ctx, func(runCtx context.Context) { m.reconciler.Run(runCtx) })
+	m.startBackgroundWorker(ctx, func(runCtx context.Context) { realtimeR.Start(runCtx) })
 
 	m.logger.Info().
 		Int("validators", len(m.cfg.Validators)).
 		Int("workers", m.cfg.WorkerPoolSize).
-		Msg("Monitor started")
+		Msg("monitor started")
 
 	return nil
 }
@@ -120,12 +71,16 @@ func (m *Monitor) startBackgroundWorker(ctx context.Context, run func(context.Co
 	}()
 }
 
-// Stop gracefully shuts down the monitor.
-func (m *Monitor) Stop() {
-	m.logger.Info().Msg("Stopping monitor...")
-	m.workerPool.Stop()
+// Stop shuts down the monitor: waits for the realtime runner to exit (caller should cancel its context first),
+// then drains the worker pool using drainCtx for in-flight and queued jobs.
+func (m *Monitor) Stop(drainCtx context.Context) {
+	if drainCtx == nil {
+		drainCtx = context.Background()
+	}
+	m.logger.Info().Msg("monitor stopping")
 	m.wg.Wait()
-	m.logger.Info().Msg("Monitor stopped")
+	m.pool.Stop(drainCtx)
+	m.logger.Info().Msg("monitor stopped")
 }
 
 // Wait blocks until the monitor is stopped.
