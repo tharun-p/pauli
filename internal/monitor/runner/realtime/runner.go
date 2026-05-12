@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -22,13 +23,15 @@ type Runner struct {
 	validators []uint64
 	log        zerolog.Logger
 	enqueue    func(context.Context, steps.Job) error
-	lastEpoch uint64
-	env       *steps.Env
+	tickWG     *sync.WaitGroup
+	lastEpoch  uint64
+	env        *steps.Env
 }
 
 var _ runner.Runner = (*Runner)(nil)
 
 // New constructs a realtime runner. lastEpoch is owned here for boundary dedup.
+// tickWG must be non-nil: each enqueued async job does Add(1) before Enqueue; the pool calls Done when the job finishes; Persist waits on this group.
 func New(
 	network *config.BlockchainNetwork,
 	client *beacon.Client,
@@ -37,6 +40,7 @@ func New(
 	validators []uint64,
 	log zerolog.Logger,
 	enqueue func(context.Context, steps.Job) error,
+	tickWG *sync.WaitGroup,
 ) *Runner {
 	return &Runner{
 		network:    network,
@@ -46,6 +50,7 @@ func New(
 		validators: validators,
 		log:        log,
 		enqueue:    enqueue,
+		tickWG:     tickWG,
 		env:        steps.NewEnv(),
 	}
 }
@@ -79,6 +84,12 @@ func (r *Runner) Start(ctx context.Context) {
 	runner.Run(ctx, r)
 }
 
+func (r *Runner) waitTickAsync() {
+	if r.tickWG != nil {
+		r.tickWG.Wait()
+	}
+}
+
 func (r *Runner) stepChain() []steps.Step {
 	return []steps.Step{
 		steprt.GetValidatorDetails{
@@ -88,13 +99,18 @@ func (r *Runner) stepChain() []steps.Step {
 			LastEpoch:  &r.lastEpoch,
 		},
 		steprt.ValidatorsBalanceAtSlot{
-			Client: r.client, Repo: r.repo, Validators: r.validators, Log: r.log,
+			Client: r.client, Validators: r.validators, Log: r.log,
 		},
 		steprt.ValidatorDuties{
-			Client: r.client, Repo: r.repo, Validators: r.validators, Log: r.log,
+			Client: r.client, Validators: r.validators, Log: r.log,
 		},
 		steprt.AttestationRewardsAtBoundary{
-			Client: r.client, Repo: r.repo, Validators: r.validators, Log: r.log,
+			Client: r.client, Validators: r.validators, Log: r.log,
+		},
+		steprt.Persist{
+			AwaitAsync: r.waitTickAsync,
+			Repo:       r.repo,
+			Log:        r.log,
 		},
 	}
 }

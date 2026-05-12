@@ -15,6 +15,8 @@ type Repository interface {
 	GetAttestationRewards(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64) ([]*AttestationReward, error)
 	GetLatestSnapshot(ctx context.Context, validatorIndex uint64) (*ValidatorSnapshot, error)
 	CountSnapshots(ctx context.Context, validatorIndex uint64) (int, error)
+	// PersistTick writes all accumulated bundle rows in a single database transaction.
+	PersistTick(ctx context.Context, bundle *PersistBundle) error
 	Close() error
 }
 

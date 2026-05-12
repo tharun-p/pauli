@@ -9,6 +9,7 @@ import (
 	"github.com/tharun/pauli/internal/config"
 	"github.com/tharun/pauli/internal/monitor/queue"
 	runrealtime "github.com/tharun/pauli/internal/monitor/runner/realtime"
+	"github.com/tharun/pauli/internal/monitor/steps"
 	"github.com/tharun/pauli/internal/storage"
 )
 
@@ -40,6 +41,18 @@ func NewMonitor(cfg *config.Config, client *beacon.Client, repo storage.Reposito
 	return m
 }
 
+// tickEnqueue wraps pool.Enqueue with a per-tick WaitGroup (Add before queue, Done on job end or enqueue error).
+func tickEnqueue(pool *queue.Pool, tickWG *sync.WaitGroup) func(context.Context, steps.Job) error {
+	return func(ctx context.Context, job steps.Job) error {
+		tickWG.Add(1)
+		err := pool.Enqueue(ctx, job)
+		if err != nil {
+			tickWG.Done()
+		}
+		return err
+	}
+}
+
 // Start begins the monitoring loop.
 func (m *Monitor) Start(ctx context.Context) error {
 	if err := initBeaconNetworkClock(ctx, m.client, m.network, m.logger); err != nil {
@@ -48,8 +61,10 @@ func (m *Monitor) Start(ctx context.Context) error {
 
 	m.logNodeSyncStatus(ctx)
 
-	enqueue := m.pool.Enqueue
-	realtimeR := runrealtime.New(m.network, m.client, m.repo, m.client.GetHeadSlot, m.cfg.Validators, m.logger, enqueue)
+	tickWG := &sync.WaitGroup{}
+	m.pool.SetOnJobEnd(func() { tickWG.Done() })
+	enqueue := tickEnqueue(m.pool, tickWG)
+	realtimeR := runrealtime.New(m.network, m.client, m.repo, m.client.GetHeadSlot, m.cfg.Validators, m.logger, enqueue, tickWG)
 
 	m.pool.Start(ctx)
 

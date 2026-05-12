@@ -14,7 +14,6 @@ import (
 // ValidatorDuties (async): attester duties for DutiesEpoch from Env; body runs on a worker.
 type ValidatorDuties struct {
 	Client     *beacon.Client
-	Repo       storage.Repository
 	Validators []uint64
 	Log        zerolog.Logger
 }
@@ -32,10 +31,19 @@ func (ValidatorDuties) Run(e *steps.Env) (bool, error) {
 
 func (s ValidatorDuties) RunAsync(ctx context.Context, e *steps.Env) error {
 	epoch := *e.DutiesEpoch
-	return runAttesterDuties(ctx, s.Client, s.Repo, s.Validators, epoch, s.Log)
+	err := runAttesterDuties(ctx, s.Client, e, s.Validators, epoch, s.Log)
+	if err != nil && e.Bundle != nil {
+		e.Bundle.RecordAsyncError(err)
+	}
+	return err
 }
 
-func runAttesterDuties(ctx context.Context, client *beacon.Client, repo storage.Repository, validators []uint64, epoch uint64, log zerolog.Logger) error {
+func runAttesterDuties(ctx context.Context, client *beacon.Client, e *steps.Env, validators []uint64, epoch uint64, log zerolog.Logger) error {
+	if e == nil || e.Bundle == nil {
+		return fmt.Errorf("nil env or bundle")
+	}
+	bundle := e.Bundle
+
 	log.Debug().
 		Uint64("epoch", epoch).
 		Int("validators_count", len(validators)).
@@ -73,17 +81,8 @@ func runAttesterDuties(ctx context.Context, client *beacon.Client, repo storage.
 	log.Debug().
 		Uint64("epoch", epoch).
 		Int("duties_count", len(duties)).
-		Msg("saving attestation duties")
+		Msg("queued attestation duties for persist")
 
-	if err := repo.SaveAttestationDuties(ctx, duties); err != nil {
-		log.Error().Err(err).Uint64("epoch", epoch).Int("duties_count", len(duties)).Msg("save attestation duties failed")
-		return fmt.Errorf("failed to save duties: %w", err)
-	}
-
-	log.Debug().
-		Uint64("epoch", epoch).
-		Int("duties_count", len(duties)).
-		Msg("saved attestation duties")
-
+	bundle.Duties = append(bundle.Duties, duties...)
 	return nil
 }

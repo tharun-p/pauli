@@ -1,6 +1,10 @@
 package steps
 
-import "context"
+import (
+	"context"
+
+	"github.com/tharun/pauli/internal/storage"
+)
 
 // Env is shared state for one loop iteration across steps. Runner.Env() returns it; runner.Run resets it each iteration before the step chain.
 type Env struct {
@@ -9,6 +13,8 @@ type Env struct {
 	ValidatorIndices []uint64
 	DutiesEpoch      *uint64
 	RewardsEpoch     *uint64
+	// Bundle collects rows for this tick; async workers share this pointer via Clone. Persist commits it.
+	Bundle *storage.PersistBundle
 }
 
 // NewEnv allocates an Env (e.g. for a Runner field).
@@ -23,6 +29,7 @@ func (e *Env) Reset(ctx context.Context) {
 	e.ValidatorIndices = e.ValidatorIndices[:0]
 	e.DutiesEpoch = nil
 	e.RewardsEpoch = nil
+	e.Bundle = storage.NewPersistBundle()
 }
 
 // Clone returns a copy of iteration fields safe to use on a worker after the runner resets Env.
@@ -45,5 +52,6 @@ func (e *Env) Clone() Env {
 		ValidatorIndices: append([]uint64(nil), e.ValidatorIndices...),
 		DutiesEpoch:      de,
 		RewardsEpoch:     re,
+		Bundle:           e.Bundle,
 	}
 }

@@ -23,6 +23,8 @@ type Pool struct {
 	runner   Runner
 	logger   zerolog.Logger
 
+	onJobEnd func()
+
 	mu      sync.RWMutex
 	runCtx  context.Context // context passed to Runner.Run; replaced before drain on Stop
 	stopped bool
@@ -35,6 +37,13 @@ func NewPool(size int, runner Runner, logger zerolog.Logger) *Pool {
 		runner:   runner,
 		logger:   logger,
 	}
+}
+
+// SetOnJobEnd registers a callback run after each job completes. Must be called before Start if used.
+func (p *Pool) SetOnJobEnd(fn func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.onJobEnd = fn
 }
 
 // Start launches workers. runCtx is used for Runner.Run until Stop replaces it with the drain context.
@@ -71,6 +80,12 @@ func (p *Pool) worker(id int) {
 		}
 		if err := p.runner.Run(rc, job); err != nil {
 			p.logger.Error().Err(err).Int("worker_id", id).Str("step", stepName).Msg("async step failed")
+		}
+		p.mu.RLock()
+		end := p.onJobEnd
+		p.mu.RUnlock()
+		if end != nil {
+			end()
 		}
 	}
 }

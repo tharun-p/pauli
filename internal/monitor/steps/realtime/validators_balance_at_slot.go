@@ -14,7 +14,6 @@ import (
 // ValidatorsBalanceAtSlot (async): full validator snapshot at Env.HeadSlot; body runs on a worker.
 type ValidatorsBalanceAtSlot struct {
 	Client     *beacon.Client
-	Repo       storage.Repository
 	Validators []uint64
 	Log        zerolog.Logger
 }
@@ -26,10 +25,18 @@ func (ValidatorsBalanceAtSlot) Async() bool { return true }
 func (ValidatorsBalanceAtSlot) Run(*steps.Env) (bool, error) { return true, nil }
 
 func (s ValidatorsBalanceAtSlot) RunAsync(ctx context.Context, e *steps.Env) error {
-	return runValidatorSnapshots(ctx, s.Client, s.Repo, s.Validators, e.HeadSlot, s.Log)
+	err := runValidatorSnapshots(ctx, s.Client, e, s.Validators, e.HeadSlot, s.Log)
+	if err != nil && e.Bundle != nil {
+		e.Bundle.RecordAsyncError(err)
+	}
+	return err
 }
 
-func runValidatorSnapshots(ctx context.Context, client *beacon.Client, repo storage.Repository, validators []uint64, slot uint64, log zerolog.Logger) error {
+func runValidatorSnapshots(ctx context.Context, client *beacon.Client, e *steps.Env, validators []uint64, slot uint64, log zerolog.Logger) error {
+	if e == nil || e.Bundle == nil {
+		return fmt.Errorf("nil env or bundle")
+	}
+	bundle := e.Bundle
 	if len(validators) == 0 {
 		return nil
 	}
@@ -81,17 +88,8 @@ func runValidatorSnapshots(ctx context.Context, client *beacon.Client, repo stor
 	log.Debug().
 		Uint64("slot", slot).
 		Int("snapshots_count", len(snapshots)).
-		Msg("saving validator snapshots batch")
+		Msg("queued validator snapshots for persist")
 
-	if err := repo.SaveValidatorSnapshots(ctx, snapshots); err != nil {
-		log.Error().Err(err).Uint64("slot", slot).Int("count", len(snapshots)).Msg("save validator snapshots failed")
-		return fmt.Errorf("failed to save snapshots: %w", err)
-	}
-
-	log.Debug().
-		Uint64("slot", slot).
-		Int("snapshots_count", len(snapshots)).
-		Msg("saved validator snapshots batch")
-
+	bundle.Snapshots = append(bundle.Snapshots, snapshots...)
 	return nil
 }

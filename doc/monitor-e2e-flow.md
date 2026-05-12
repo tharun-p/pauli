@@ -1,6 +1,6 @@
 # Monitor E2E Interaction Flow
 
-Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing, **lastEpoch** for boundary dedup, and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — **sync** steps run entirely on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**. Historical catch-up / backfill is **not** implemented yet. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
+Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing, **lastEpoch** for boundary dedup, and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — **sync** steps run entirely on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**. **`Env.Bundle`** (`storage.PersistBundle`) is shared by reference across clones: async steps **append** fetched rows only; the sync **`Persist`** step **`WaitGroup`-waits** for all async jobs for this tick (pool **`SetOnJobEnd`**) then runs **`Repository.PersistTick`** in **one transaction**. If any **`RunAsync`** fails, the bundle records **`AsyncError`** and **Persist skips the DB write** (whole tick aborted). Historical catch-up / backfill is **not** implemented yet. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
 
 ```mermaid
 flowchart TD
@@ -19,8 +19,8 @@ flowchart TD
 
   Enqueue["pool.Enqueue(ctx, steps.Job)"] --> WorkerN[Worker goroutines]
   WorkerN --> Process["Step.RunAsync(ctx, &job.Env)"]
-  Process --> Snap["snapshots / duties / rewards"]
-  Snap --> Repo[repo Save* methods]
+  Process --> Snap["append to Env.Bundle"]
+  Snap --> TickDone[pool onJobEnd: WaitGroup Done]
 
   Stop["Monitor.Stop(drainCtx)"] --> WaitRt["monitor wg.Wait: realtime runner exits"]
   WaitRt --> CloseJobs["pool.Stop(drainCtx): set drain runCtx, close workChan"]
@@ -42,7 +42,7 @@ flowchart LR
   H --> B
 ```
 
-**In one sentence:** `runner/realtime.Runner` wires wait + **`steps/realtime`** step chain — **GetValidatorDetails** (sync: head, validator copy, boundary plan); then **ValidatorsBalanceAtSlot**, **ValidatorDuties**, **AttestationRewardsAtBoundary** (async; enqueue a **Job** when **`Run` schedules work).
+**In one sentence:** `runner/realtime.Runner` wires wait + **`steps/realtime`** step chain — **GetValidatorDetails** (sync: head, validator copy, boundary plan); then **ValidatorsBalanceAtSlot**, **ValidatorDuties**, **AttestationRewardsAtBoundary** (async; enqueue a **Job** when **`Run` schedules work**); finally **Persist** (sync: wait for async jobs, then **`PersistTick`**).
 
 ## Module and package call graph
 
@@ -76,14 +76,14 @@ flowchart LR
 
 1. `runner/realtime.Runner.Start(ctx)` calls `runner.Run(ctx, m)` until `ctx` is done.
 2. `BeforeStep`: `BlockchainNetwork.WaitPollInterval`.
-3. `StepChain`: **`steps/realtime`** — **GetValidatorDetails** (sync, runner-owned `lastEpoch`), **ValidatorsBalanceAtSlot**, **ValidatorDuties**, **AttestationRewardsAtBoundary** (async).
-4. `runner.Run`: `m.Env()` then `Reset(ctx)`, then each `steps.Step.Run(env)`; if **`Async()`** and **`Run` returns `enqueue=true`**, it **`m.Enqueue` / `pool.Enqueue`** a **`steps.Job{Step, Env.Clone()}`**.
+3. `StepChain`: **`steps/realtime`** — **GetValidatorDetails** (sync, runner-owned `lastEpoch`), **ValidatorsBalanceAtSlot**, **ValidatorDuties**, **AttestationRewardsAtBoundary** (async), **Persist** (sync).
+4. `runner.Run`: `m.Env()` then `Reset(ctx)` (new **`Bundle`**), then each `steps.Step.Run(env)`; if **`Async()`** and **`Run` returns `enqueue=true`**, it **`m.Enqueue` / `pool.Enqueue`** a **`steps.Job{Step, Env.Clone()}`** (clone shares **`Bundle` pointer**). **`Monitor`** wraps `Enqueue` with **`WaitGroup.Add(1)`** and registers **`pool.SetOnJobEnd(Done)`**.
 
 ## Execution path
 
 1. Workers dequeue **`steps.Job`**.
-2. **`Step.RunAsync(ctx, &job.Env)`** runs the async body (snapshots, duties, or rewards in `internal/monitor/steps/realtime`).
-3. Data is written through `storage.Repository` (failures log at **error** by default; more detail with `-debug`).
+2. **`Step.RunAsync(ctx, &job.Env)`** runs the async body (fetch only; append into **`Env.Bundle`** in `internal/monitor/steps/realtime`). Failures set **`Bundle.RecordAsyncError`** and log at **error** (more detail with `-debug`).
+3. After async steps enqueue, **`Persist.Run`** waits on the tick **`WaitGroup`**, then **`Repository.PersistTick`** commits snapshots, duties, rewards, and penalties in **one transaction** (skipped if **`AsyncError`** is set).
 
 ## Shutdown
 

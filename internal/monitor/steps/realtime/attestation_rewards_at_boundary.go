@@ -15,7 +15,6 @@ import (
 // AttestationRewardsAtBoundary (async): rewards for RewardsEpoch from Env; body runs on a worker.
 type AttestationRewardsAtBoundary struct {
 	Client     *beacon.Client
-	Repo       storage.Repository
 	Validators []uint64
 	Log        zerolog.Logger
 }
@@ -34,10 +33,19 @@ func (AttestationRewardsAtBoundary) Run(e *steps.Env) (bool, error) {
 func (s AttestationRewardsAtBoundary) RunAsync(ctx context.Context, e *steps.Env) error {
 	epoch := *e.RewardsEpoch
 	epochStartSlot := epoch * config.SlotsPerEpoch()
-	return runAttestationRewards(ctx, s.Client, s.Repo, s.Validators, epoch, epochStartSlot, s.Log)
+	err := runAttestationRewards(ctx, s.Client, e, s.Validators, epoch, epochStartSlot, s.Log)
+	if err != nil && e.Bundle != nil {
+		e.Bundle.RecordAsyncError(err)
+	}
+	return err
 }
 
-func runAttestationRewards(ctx context.Context, client *beacon.Client, repo storage.Repository, validators []uint64, epoch, epochStartSlot uint64, log zerolog.Logger) error {
+func runAttestationRewards(ctx context.Context, client *beacon.Client, e *steps.Env, validators []uint64, epoch, epochStartSlot uint64, log zerolog.Logger) error {
+	if e == nil || e.Bundle == nil {
+		return fmt.Errorf("nil env or bundle")
+	}
+	bundle := e.Bundle
+
 	resp, err := client.GetAttestationRewards(ctx, epoch, validators)
 	if err != nil {
 		log.Error().Err(err).Uint64("epoch", epoch).Msg("fetch attestation rewards failed")
@@ -45,7 +53,7 @@ func runAttestationRewards(ctx context.Context, client *beacon.Client, repo stor
 	}
 
 	rewards := make([]*storage.AttestationReward, 0, len(resp.TotalRewards))
-	var penalties []*storage.ValidatorPenalty
+	penalties := make([]*storage.ValidatorPenalty, 0)
 
 	for _, r := range resp.TotalRewards {
 		totalReward := r.Head.Int64() + r.Source.Int64() + r.Target.Int64()
@@ -74,21 +82,13 @@ func runAttestationRewards(ctx context.Context, client *beacon.Client, repo stor
 		}
 	}
 
-	if err := repo.SaveAttestationRewards(ctx, rewards); err != nil {
-		log.Error().Err(err).Uint64("epoch", epoch).Int("rewards_count", len(rewards)).Msg("save attestation rewards failed")
-		return fmt.Errorf("failed to save rewards: %w", err)
-	}
-
 	log.Debug().
 		Uint64("epoch", epoch).
 		Int("rewards_count", len(rewards)).
-		Msg("saved attestation rewards")
+		Int("penalties_count", len(penalties)).
+		Msg("queued attestation rewards and penalties for persist")
 
-	for _, penalty := range penalties {
-		if err := repo.SaveValidatorPenalty(ctx, penalty); err != nil {
-			log.Error().Err(err).Uint64("validator_index", penalty.ValidatorIndex).Msg("save validator penalty failed")
-		}
-	}
-
+	bundle.Rewards = append(bundle.Rewards, rewards...)
+	bundle.Penalties = append(bundle.Penalties, penalties...)
 	return nil
 }

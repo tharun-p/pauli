@@ -100,26 +100,28 @@ Indexing is driven by a **realtime runner loop** (`internal/monitor/runner` + `r
 
 After **`BeforeStep`** (`BlockchainNetwork.WaitPollInterval`), one iteration does:
 
-1. **`StepChain`** returns the same ordered steps every time: **GetValidatorDetails** → **ValidatorsBalanceAtSlot** → **ValidatorDuties** → **AttestationRewardsAtBoundary**.
-2. **`Env().Reset(ctx)`** clears per-iteration shared state, then each step’s **`Run(env)`** runs on the **runner goroutine**.
+1. **`StepChain`** returns the same ordered steps every time: **GetValidatorDetails** → **ValidatorsBalanceAtSlot** → **ValidatorDuties** → **AttestationRewardsAtBoundary** → **Persist**.
+2. **`Env().Reset(ctx)`** clears per-iteration shared state and allocates a fresh **`Env.Bundle`**, then each step’s **`Run(env)`** runs on the **runner goroutine**.
 
 So **`polling_interval_slots`** controls **how often** that full chain runs, not “only when slot mod N == 0.”
 
 ### Sync vs async steps
 
 - **Sync** (**GetValidatorDetails**): fetches **head slot**, copies configured validators into **`Env`**, and at **epoch boundaries** (first or last slot of an epoch, with **dedup** via runner-owned **`lastEpoch`**) sets **`Env.DutiesEpoch`** / **`Env.RewardsEpoch`** when work is planned.
-- **Async** steps: **`Run`** returns whether to **enqueue** a **`steps.Job`** (the step plus a **cloned `Env`**). Workers call **`Step.RunAsync`** and talk to the beacon node + repository. Heavy I/O runs on the **worker pool** (`worker_pool_size`).
+- **Async** steps: **`Run`** returns whether to **enqueue** a **`steps.Job`** (the step plus a **cloned `Env`**; **`Env.Bundle`** is shared by pointer). Workers call **`Step.RunAsync`**, fetch from the beacon API, and **append** into **`Bundle`** only (no DB writes). Heavy I/O runs on the **worker pool** (`worker_pool_size`).
+- **Persist** (sync): after async jobs for the tick finish, **`Repository.PersistTick`** writes the bundle in **one transaction**; if any async step failed, the tick is **aborted** (no write).
 
 ### What each step does (current behavior)
 
 | Step | Runner vs worker | Role |
 |------|------------------|------|
 | **GetValidatorDetails** | Runner (sync) | Head slot, validator list on **`Env`**, boundary plan for duties/rewards epochs |
-| **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Batched validator state at **`Env.HeadSlot`** → snapshots |
+| **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Batched validator state at **`Env.HeadSlot`** → append snapshots to **`Bundle`** |
 | **ValidatorDuties** | Worker (`RunAsync`) | Attester duties for **`Env.DutiesEpoch`** when set; skipped when nil |
-| **AttestationRewardsAtBoundary** | Worker (`RunAsync`) | Rewards (and derived penalties) for **`Env.RewardsEpoch`** when set; skipped when nil |
+| **AttestationRewardsAtBoundary** | Worker (`RunAsync`) | Rewards and derived penalties for **`Env.RewardsEpoch`** when set; skipped when nil |
+| **Persist** | Runner (sync) | Wait for async jobs; **`PersistTick`** commits **`Bundle`** atomically (skip on async failure) |
 
-**Penalties** are still written from reward processing when net reward is negative; there is no separate penalty scheduler.
+**Penalties** are accumulated with rewards when net reward is negative; both persist inside **`PersistTick`**.
 
 ### Out of scope today
 
@@ -136,8 +138,9 @@ flowchart LR
     D --> F[Enqueue steps.Job]
     F --> G[Worker pool]
     G --> H[RunAsync → Beacon API]
-    G --> I[RunAsync → Repository]
-    I --> J[(PostgreSQL)]
+    H --> I[Append Env.Bundle]
+    D --> P[Persist: PersistTick]
+    P --> J[(PostgreSQL)]
 ```
 
 ## Project Layout
