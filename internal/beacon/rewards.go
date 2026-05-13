@@ -3,6 +3,7 @@ package beacon
 import (
 	"context"
 	"fmt"
+	"net/url"
 )
 
 // GetAttestationRewards fetches attestation rewards for validators in an epoch.
@@ -23,6 +24,35 @@ func (c *Client) GetAttestationRewards(ctx context.Context, epoch uint64, valida
 	}
 
 	return &resp.Data, nil
+}
+
+// GetBlockRewards fetches aggregate proposer rewards for a beacon block.
+// blockID may be a slot string, "head", "finalized", genesis, or a block root (0x-prefixed hex).
+func (c *Client) GetBlockRewards(ctx context.Context, blockID string) (*BlockRewardsData, error) {
+	path := fmt.Sprintf("/eth/v1/beacon/rewards/blocks/%s", url.PathEscape(blockID))
+
+	var resp BlockRewardsResponse
+	if err := c.get(ctx, path, &resp); err != nil {
+		return nil, fmt.Errorf("failed to get block rewards for %s: %w", blockID, err)
+	}
+
+	return &resp.Data, nil
+}
+
+// GetBlockExecutionBlockNumber returns the execution payload block_number for a consensus block, if present.
+func (c *Client) GetBlockExecutionBlockNumber(ctx context.Context, blockID string) (*uint64, error) {
+	path := fmt.Sprintf("/eth/v2/beacon/blocks/%s", url.PathEscape(blockID))
+
+	var raw blockV2ExecutionNumberJSON
+	if err := c.get(ctx, path, &raw); err != nil {
+		return nil, err
+	}
+	ep := raw.Data.Message.Body.ExecutionPayload
+	if ep == nil {
+		return nil, nil
+	}
+	n := ep.BlockNumber.Uint64()
+	return &n, nil
 }
 
 // GetAttestationRewardsMap fetches attestation rewards and returns them as a map keyed by validator index.

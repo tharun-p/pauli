@@ -33,6 +33,16 @@ type AttestationReward struct {
 	Timestamp      time.Time `json:"timestamp"`
 }
 
+// BlockProposerReward is one row when a monitored validator proposed a block at slot_number.
+type BlockProposerReward struct {
+	ValidatorIndex  uint64    `json:"validator_index"`
+	ValidatorPubkey string    `json:"validator_pubkey"`
+	SlotNumber      uint64    `json:"slot_number"`
+	BlockNumber     *uint64   `json:"block_number,omitempty"` // Execution layer block number when available
+	Rewards         uint64    `json:"rewards"`                // Proposer reward total (gwei)
+	Timestamp       time.Time `json:"timestamp"`
+}
+
 // ValidatorPenalty represents a penalty applied to a validator.
 type ValidatorPenalty struct {
 	ValidatorIndex uint64    `json:"validator_index"`
