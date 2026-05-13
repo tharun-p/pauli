@@ -104,6 +104,13 @@ func (r *Runner) stepChain() []steps.Step {
 			Log:               r.log,
 			LastProcessedSlot: &r.lastProcessedSlot,
 		},
+		&steprt.BlockProposerRewards{
+			Client:            r.client,
+			Repo:              r.repo,
+			Validators:        r.validators,
+			Log:               r.log,
+			LastProcessedSlot: &r.lastProcessedSlot,
+		},
 		&steprt.RecordLastProcessedSlot{
 			LastProcessedSlot: &r.lastProcessedSlot,
 		},

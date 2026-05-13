@@ -183,6 +183,52 @@ func (r *Repository) SaveAttestationRewards(ctx context.Context, rewards []*stor
 	return nil
 }
 
+// SaveBlockProposerReward upserts a block proposer reward row.
+func (r *Repository) SaveBlockProposerReward(ctx context.Context, row *storage.BlockProposerReward) error {
+	if row.Timestamp.IsZero() {
+		row.Timestamp = time.Now().UTC()
+	}
+
+	const query = `
+		INSERT INTO block_proposer_rewards (
+			validator_index, validator_pubkey, slot_number, block_number, rewards, timestamp
+		) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (validator_index, slot_number) DO UPDATE SET
+			validator_pubkey = EXCLUDED.validator_pubkey,
+			block_number = EXCLUDED.block_number,
+			rewards = EXCLUDED.rewards,
+			timestamp = EXCLUDED.timestamp
+	`
+
+	var blockNum interface{}
+	if row.BlockNumber != nil {
+		blockNum = *row.BlockNumber
+	}
+
+	_, err := r.client.Pool.Exec(ctx, query,
+		row.ValidatorIndex,
+		row.ValidatorPubkey,
+		row.SlotNumber,
+		blockNum,
+		row.Rewards,
+		row.Timestamp,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save block proposer reward: %w", err)
+	}
+	return nil
+}
+
+// SaveBlockProposerRewards saves multiple block proposer reward rows.
+func (r *Repository) SaveBlockProposerRewards(ctx context.Context, rows []*storage.BlockProposerReward) error {
+	for _, row := range rows {
+		if err := r.SaveBlockProposerReward(ctx, row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SaveValidatorPenalty saves a validator penalty to the database.
 func (r *Repository) SaveValidatorPenalty(ctx context.Context, penalty *storage.ValidatorPenalty) error {
 	if penalty.Timestamp.IsZero() {

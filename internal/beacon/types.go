@@ -8,9 +8,9 @@ import (
 
 // APIResponse is the standard Beacon API response envelope.
 type APIResponse[T any] struct {
-	Data                T      `json:"data"`
-	ExecutionOptimistic bool   `json:"execution_optimistic,omitempty"`
-	Finalized           bool   `json:"finalized,omitempty"`
+	Data                T    `json:"data"`
+	ExecutionOptimistic bool `json:"execution_optimistic,omitempty"`
+	Finalized           bool `json:"finalized,omitempty"`
 }
 
 // Validator represents a validator's state from the Beacon API.
@@ -50,9 +50,9 @@ type AttesterDuty struct {
 
 // AttesterDutiesResponse is the response from /eth/v1/validator/duties/attester/{epoch}.
 type AttesterDutiesResponse struct {
-	DependentRoot           string         `json:"dependent_root"`
-	ExecutionOptimistic     bool           `json:"execution_optimistic"`
-	Data                    []AttesterDuty `json:"data"`
+	DependentRoot       string         `json:"dependent_root"`
+	ExecutionOptimistic bool           `json:"execution_optimistic"`
+	Data                []AttesterDuty `json:"data"`
 }
 
 // AttestationReward represents rewards for a single validator's attestation.
@@ -65,12 +65,39 @@ type AttestationReward struct {
 
 // AttestationRewardsData contains the rewards breakdown.
 type AttestationRewardsData struct {
-	IdealRewards  []AttestationReward `json:"ideal_rewards"`
-	TotalRewards  []AttestationReward `json:"total_rewards"`
+	IdealRewards []AttestationReward `json:"ideal_rewards"`
+	TotalRewards []AttestationReward `json:"total_rewards"`
 }
 
 // AttestationRewardsResponse is the response from /eth/v1/beacon/rewards/attestations/{epoch}.
 type AttestationRewardsResponse = APIResponse[AttestationRewardsData]
+
+// BlockRewardsData is the data object from GET /eth/v1/beacon/rewards/blocks/{block_id}.
+type BlockRewardsData struct {
+	ProposerIndex     Uint64Str `json:"proposer_index"`
+	Total             Uint64Str `json:"total"`
+	Attestations      Uint64Str `json:"attestations"`
+	SyncAggregate     Uint64Str `json:"sync_aggregate"`
+	ProposerSlashings Uint64Str `json:"proposer_slashings"`
+	AttesterSlashings Uint64Str `json:"attester_slashings"`
+}
+
+// BlockRewardsResponse is the response from /eth/v1/beacon/rewards/blocks/{block_id}.
+type BlockRewardsResponse = APIResponse[BlockRewardsData]
+
+// blockV2ExecutionNumberJSON unmarshals only execution_payload.block_number from
+// GET /eth/v2/beacon/blocks/{block_id} for a lightweight execution layer reference.
+type blockV2ExecutionNumberJSON struct {
+	Data struct {
+		Message struct {
+			Body struct {
+				ExecutionPayload *struct {
+					BlockNumber Uint64Str `json:"block_number"`
+				} `json:"execution_payload"`
+			} `json:"body"`
+		} `json:"message"`
+	} `json:"data"`
+}
 
 // BeaconBlockHeader represents a block header from the Beacon API.
 type BeaconBlockHeader struct {
