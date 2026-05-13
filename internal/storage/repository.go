@@ -16,7 +16,14 @@ type Repository interface {
 	SaveSyncCommitteeRewards(ctx context.Context, rows []*SyncCommitteeReward) error
 	SaveValidatorPenalty(ctx context.Context, penalty *ValidatorPenalty) error
 	GetValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64) ([]*ValidatorSnapshot, error)
+	ListValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64, limit, offset int) ([]*ValidatorSnapshot, error)
 	GetAttestationRewards(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64) ([]*AttestationReward, error)
+	// ListAttestationRewards returns attestation rewards in epoch order (newest epoch first). If validatorIndex is nil, all validators are included.
+	ListAttestationRewards(ctx context.Context, validatorIndex *uint64, fromEpoch, toEpoch uint64, limit, offset int) ([]*AttestationReward, error)
+	ListBlockProposerRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*BlockProposerReward, error)
+	ListSyncCommitteeRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*SyncCommitteeReward, error)
+	GetValidatorPenalties(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64, limit, offset int) ([]*ValidatorPenalty, error)
+	ListValidators(ctx context.Context, limit, offset int) ([]uint64, error)
 	GetLatestSnapshot(ctx context.Context, validatorIndex uint64) (*ValidatorSnapshot, error)
 	CountSnapshots(ctx context.Context, validatorIndex uint64) (int, error)
 	Close() error

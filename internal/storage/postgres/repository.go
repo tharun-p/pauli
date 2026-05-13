@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -338,6 +340,44 @@ func (r *Repository) GetValidatorSnapshots(ctx context.Context, validatorIndex u
 	return snapshots, nil
 }
 
+// ListValidatorSnapshots returns snapshots for a validator in a slot range with pagination (newest slots first).
+func (r *Repository) ListValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64, limit, offset int) ([]*storage.ValidatorSnapshot, error) {
+	const query = `
+		SELECT validator_index, slot, status, balance, effective_balance, timestamp
+		FROM validator_snapshots
+		WHERE validator_index = $1 AND slot >= $2 AND slot <= $3
+		ORDER BY slot DESC
+		LIMIT $4 OFFSET $5
+	`
+
+	rows, err := r.client.Pool.Query(ctx, query, validatorIndex, fromSlot, toSlot, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list validator snapshots: %w", err)
+	}
+	defer rows.Close()
+
+	var snapshots []*storage.ValidatorSnapshot
+	for rows.Next() {
+		var s storage.ValidatorSnapshot
+		if err := rows.Scan(
+			&s.ValidatorIndex,
+			&s.Slot,
+			&s.Status,
+			&s.Balance,
+			&s.EffectiveBalance,
+			&s.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan validator snapshot: %w", err)
+		}
+		snapshot := s
+		snapshots = append(snapshots, &snapshot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate validator snapshots: %w", err)
+	}
+	return snapshots, nil
+}
+
 // GetAttestationRewards retrieves attestation rewards for a validator within an epoch range.
 func (r *Repository) GetAttestationRewards(ctx context.Context, validatorIndex uint64, fromEpoch, toEpoch uint64) ([]*storage.AttestationReward, error) {
 	const query = `
@@ -375,6 +415,212 @@ func (r *Repository) GetAttestationRewards(ctx context.Context, validatorIndex u
 		return nil, fmt.Errorf("failed to iterate attestation rewards: %w", err)
 	}
 	return rewards, nil
+}
+
+// ListAttestationRewards returns attestation rewards for an epoch range, optionally filtered to one validator.
+func (r *Repository) ListAttestationRewards(ctx context.Context, validatorIndex *uint64, fromEpoch, toEpoch uint64, limit, offset int) ([]*storage.AttestationReward, error) {
+	var sb strings.Builder
+	sb.WriteString(`
+		SELECT validator_index, epoch, head_reward, source_reward, target_reward, total_reward, timestamp
+		FROM attestation_rewards
+		WHERE epoch >= $1 AND epoch <= $2`)
+	args := []any{fromEpoch, toEpoch}
+	argPos := 3
+	if validatorIndex != nil {
+		fmt.Fprintf(&sb, " AND validator_index = $%d", argPos)
+		args = append(args, *validatorIndex)
+		argPos++
+	}
+	fmt.Fprintf(&sb, " ORDER BY epoch DESC, validator_index ASC LIMIT $%d OFFSET $%d", argPos, argPos+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.client.Pool.Query(ctx, sb.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list attestation rewards: %w", err)
+	}
+	defer rows.Close()
+
+	var rewards []*storage.AttestationReward
+	for rows.Next() {
+		var rwd storage.AttestationReward
+		if err := rows.Scan(
+			&rwd.ValidatorIndex,
+			&rwd.Epoch,
+			&rwd.HeadReward,
+			&rwd.SourceReward,
+			&rwd.TargetReward,
+			&rwd.TotalReward,
+			&rwd.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan attestation reward: %w", err)
+		}
+		reward := rwd
+		rewards = append(rewards, &reward)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate attestation rewards: %w", err)
+	}
+	return rewards, nil
+}
+
+// ListBlockProposerRewards returns block proposer rewards for a slot range, optionally filtered to one validator.
+func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*storage.BlockProposerReward, error) {
+	var sb strings.Builder
+	sb.WriteString(`
+		SELECT validator_index, validator_pubkey, slot_number, block_number, rewards, timestamp
+		FROM block_proposer_rewards
+		WHERE slot_number >= $1 AND slot_number <= $2`)
+	args := []any{fromSlot, toSlot}
+	argPos := 3
+	if validatorIndex != nil {
+		fmt.Fprintf(&sb, " AND validator_index = $%d", argPos)
+		args = append(args, *validatorIndex)
+		argPos++
+	}
+	fmt.Fprintf(&sb, " ORDER BY slot_number DESC, validator_index ASC LIMIT $%d OFFSET $%d", argPos, argPos+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.client.Pool.Query(ctx, sb.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list block proposer rewards: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*storage.BlockProposerReward
+	for rows.Next() {
+		var row storage.BlockProposerReward
+		var blockNum sql.NullInt64
+		if err := rows.Scan(
+			&row.ValidatorIndex,
+			&row.ValidatorPubkey,
+			&row.SlotNumber,
+			&blockNum,
+			&row.Rewards,
+			&row.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan block proposer reward: %w", err)
+		}
+		if blockNum.Valid {
+			bn := uint64(blockNum.Int64)
+			row.BlockNumber = &bn
+		}
+		cp := row
+		out = append(out, &cp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate block proposer rewards: %w", err)
+	}
+	return out, nil
+}
+
+// ListSyncCommitteeRewards returns sync committee rewards for a slot range, optionally filtered to one validator.
+func (r *Repository) ListSyncCommitteeRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*storage.SyncCommitteeReward, error) {
+	var sb strings.Builder
+	sb.WriteString(`
+		SELECT validator_index, slot, reward_gwei, execution_optimistic, finalized, timestamp
+		FROM sync_committee_rewards
+		WHERE slot >= $1 AND slot <= $2`)
+	args := []any{fromSlot, toSlot}
+	argPos := 3
+	if validatorIndex != nil {
+		fmt.Fprintf(&sb, " AND validator_index = $%d", argPos)
+		args = append(args, *validatorIndex)
+		argPos++
+	}
+	fmt.Fprintf(&sb, " ORDER BY slot DESC, validator_index ASC LIMIT $%d OFFSET $%d", argPos, argPos+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.client.Pool.Query(ctx, sb.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sync committee rewards: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*storage.SyncCommitteeReward
+	for rows.Next() {
+		var row storage.SyncCommitteeReward
+		if err := rows.Scan(
+			&row.ValidatorIndex,
+			&row.Slot,
+			&row.RewardGwei,
+			&row.ExecutionOptimistic,
+			&row.Finalized,
+			&row.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan sync committee reward: %w", err)
+		}
+		cp := row
+		out = append(out, &cp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate sync committee rewards: %w", err)
+	}
+	return out, nil
+}
+
+// GetValidatorPenalties returns penalties for a validator in an epoch range with pagination.
+func (r *Repository) GetValidatorPenalties(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64, limit, offset int) ([]*storage.ValidatorPenalty, error) {
+	const query = `
+		SELECT validator_index, epoch, slot, penalty_type, penalty_gwei, timestamp
+		FROM validator_penalties
+		WHERE validator_index = $1 AND epoch >= $2 AND epoch <= $3
+		ORDER BY epoch DESC, slot DESC
+		LIMIT $4 OFFSET $5
+	`
+	rows, err := r.client.Pool.Query(ctx, query, validatorIndex, fromEpoch, toEpoch, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator penalties: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*storage.ValidatorPenalty
+	for rows.Next() {
+		var row storage.ValidatorPenalty
+		if err := rows.Scan(
+			&row.ValidatorIndex,
+			&row.Epoch,
+			&row.Slot,
+			&row.PenaltyType,
+			&row.PenaltyGwei,
+			&row.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan validator penalty: %w", err)
+		}
+		cp := row
+		out = append(out, &cp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate validator penalties: %w", err)
+	}
+	return out, nil
+}
+
+// ListValidators returns distinct validator indices that have snapshots, ordered ascending.
+func (r *Repository) ListValidators(ctx context.Context, limit, offset int) ([]uint64, error) {
+	const query = `
+		SELECT DISTINCT validator_index
+		FROM validator_snapshots
+		ORDER BY validator_index ASC
+		LIMIT $1 OFFSET $2
+	`
+	rows, err := r.client.Pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list validators: %w", err)
+	}
+	defer rows.Close()
+
+	var indices []uint64
+	for rows.Next() {
+		var idx uint64
+		if err := rows.Scan(&idx); err != nil {
+			return nil, fmt.Errorf("failed to scan validator index: %w", err)
+		}
+		indices = append(indices, idx)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate validators: %w", err)
+	}
+	return indices, nil
 }
 
 // GetLatestSnapshot retrieves the most recent snapshot for a validator.
