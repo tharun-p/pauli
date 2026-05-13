@@ -24,7 +24,7 @@ This project is a data indexing service for validator operations. It is **not** 
 ```bash
 git clone https://github.com/tharun/pauli.git
 cd pauli
-go build -o validator-monitor .
+go build -o validator-monitor ./cmd/pauli
 ./validator-monitor -config config.yaml
 ```
 
@@ -76,6 +76,24 @@ A fuller sample is in `config.example.yaml`. For local Postgres, see `docker.com
 # background
 nohup ./validator-monitor -config config.yaml > monitor.log 2>&1 &
 ```
+
+## REST API binary (`pauli-api`)
+
+`pauli-api` is a separate executable that serves read-only HTTP endpoints backed by the same PostgreSQL database as the monitor. It does **not** require `beacon_node_url` or `validators` in its config.
+
+Build and run:
+
+```bash
+go build -o pauli-api ./cmd/pauli-api
+./pauli-api -config config.api.yaml
+```
+
+Use **`config.api.example.yaml`** as a template (`listen` + `postgres` only).
+
+Endpoints:
+
+- **`GET /healthz`** — returns `200` if the database health check passes, otherwise `503`.
+- **`GET /v1/validators/{validatorIndex}/snapshots/latest`** — JSON body is the latest [`ValidatorSnapshot`](internal/storage/models.go) for that index, or `404` if none exists.
 
 ## Indexed Data
 
@@ -145,13 +163,17 @@ flowchart LR
 
 ```
 pauli/
-├── main.go
+├── cmd/
+│   ├── pauli/                # validator monitor binary
+│   └── pauli-api/            # REST API binary (read Postgres)
 ├── config.yaml
 ├── doc/
 │   └── monitor-e2e-flow.md   # monitor/runner/steps/queue sequence diagrams
 ├── internal/
+│   ├── api/                  # HTTP handlers for pauli-api
 │   ├── beacon/               # Beacon API client + endpoint handlers
 │   ├── config/               # YAML config loading/validation + BlockchainNetwork
+│   ├── logsetup/             # shared zerolog setup for binaries
 │   ├── monitor/
 │   │   ├── monitor.go        # wires pool + realtime runner
 │   │   ├── queue/            # worker pool; runs Step.RunAsync via steps.Job

@@ -1,0 +1,13 @@
+# Configuration for cmd/pauli-api (REST server; Postgres only).
+
+listen: ":8080"
+
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  user: "pauli"
+  password: "pauli"
+  database: "validator_monitor"
+  ssl_mode: "disable"
+  max_conns: 10
+  ttl_days: 90

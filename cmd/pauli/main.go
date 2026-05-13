@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tharun/pauli/internal/beacon"
 	"github.com/tharun/pauli/internal/config"
+	"github.com/tharun/pauli/internal/logsetup"
 	"github.com/tharun/pauli/internal/monitor"
 	"github.com/tharun/pauli/internal/store"
 )
@@ -21,7 +21,7 @@ func main() {
 	debug := flag.Bool("debug", false, "Verbose debug logging (default: info/warn/error for operations)")
 	flag.Parse()
 
-	setupLogger(*debug)
+	logsetup.Setup(*debug)
 
 	log.Debug().Str("config", *configPath).Msg("starting validator monitor")
 
@@ -135,29 +135,4 @@ func main() {
 	case <-shutdownCtx.Done():
 		log.Warn().Msg("shutdown timed out")
 	}
-}
-
-func setupLogger(debug bool) {
-	if debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		// Info: lifecycle (start/stop). Warn: recoverable probes. Error: indexing / runner failures.
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	}
-
-	zerolog.TimeFieldFormat = time.RFC3339
-
-	if isTerminal() {
-		log.Logger = log.Output(zerolog.ConsoleWriter{
-			Out:        os.Stdout,
-			TimeFormat: time.RFC3339,
-		})
-	} else {
-		log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	}
-}
-
-func isTerminal() bool {
-	fileInfo, _ := os.Stdout.Stat()
-	return (fileInfo.Mode() & os.ModeCharDevice) != 0
 }
