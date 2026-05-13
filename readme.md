@@ -8,7 +8,7 @@ This project is a data indexing service for validator operations. It is **not** 
 
 - On each poll, reads **chain head** and runs a **linear step chain** (see below)
 - Writes **validator snapshots** at the current head slot (async workers)
-- Plans **duties** and **rewards** epochs at **slot/epoch boundaries** and indexes them when scheduled (async workers)
+- Indexes **attestation rewards** at **epoch boundaries** when scheduled (async workers)
 - Persists indexed records to the configured backend (TTL / retention via `ttl_days` where applicable)
 - Default logs **info** (lifecycle), **warn** (probes / sync), and **errors** (indexing, beacon, runner); use **`-debug`** for verbose request/step logging
 - **No historical catch-up** yet: one realtime pass per poll, not a multi-slot reconciliation cursor
@@ -100,24 +100,25 @@ Indexing is driven by a **realtime runner loop** (`internal/monitor/runner` + `r
 
 After **`BeforeStep`** (`BlockchainNetwork.WaitPollInterval`), one iteration does:
 
-1. **`StepChain`** returns the same ordered steps every time: **GetValidatorDetails** → **ValidatorsBalanceAtSlot** → **ValidatorDuties** → **AttestationRewardsAtBoundary**.
+1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **ValidatorsBalanceAtSlot** → **AttestationRewards** → **RecordLastProcessedSlot**.
 2. **`Env().Reset(ctx)`** clears per-iteration shared state, then each step’s **`Run(env)`** runs on the **runner goroutine**.
 
 So **`polling_interval_slots`** controls **how often** that full chain runs, not “only when slot mod N == 0.”
 
 ### Sync vs async steps
 
-- **Sync** (**GetValidatorDetails**): fetches **head slot**, copies configured validators into **`Env`**, and at **epoch boundaries** (first or last slot of an epoch, with **dedup** via runner-owned **`lastEpoch`**) sets **`Env.DutiesEpoch`** / **`Env.RewardsEpoch`** when work is planned.
-- **Async** steps: **`Run`** returns whether to **enqueue** a **`steps.Job`** (the step plus a **cloned `Env`**). Workers call **`Step.RunAsync`** and talk to the beacon node + repository. Heavy I/O runs on the **worker pool** (`worker_pool_size`).
+- **Sync** (**RealtimeEnvBootstrap**): **`Run`** only fetches **head slot** and copies configured validators into **`Env`**.
+- **Sync** (**RecordLastProcessedSlot**): runs **last**; after the rest of the chain ran without error, stores **`lastProcessedSlot`** on the runner so the next poll can **skip** when **`HeadSlot`** is unchanged.
+- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; otherwise **`ValidatorsBalanceAtSlot`** always enqueues, while **AttestationRewards** enqueues only at **epoch boundaries**. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`).
 
 ### What each step does (current behavior)
 
 | Step | Runner vs worker | Role |
 |------|------------------|------|
-| **GetValidatorDetails** | Runner (sync) | Head slot, validator list on **`Env`**, boundary plan for duties/rewards epochs |
-| **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Batched validator state at **`Env.HeadSlot`** → snapshots |
-| **ValidatorDuties** | Worker (`RunAsync`) | Attester duties for **`Env.DutiesEpoch`** when set; skipped when nil |
-| **AttestationRewardsAtBoundary** | Worker (`RunAsync`) | Rewards (and derived penalties) for **`Env.RewardsEpoch`** when set; skipped when nil |
+| **RealtimeEnvBootstrap** | Runner (`Run` only) | Head slot and validator list on **`Env`** |
+| **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Skips if head already recorded; batched validator state at **`Env.HeadSlot`** → snapshots |
+| **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary with a prior epoch, rewards (and derived penalties) |
+| **RecordLastProcessedSlot** | Runner (`Run` only) | Sets runner **`lastProcessedSlot`** to **`Env.HeadSlot`** after a successful chain pass |
 
 **Penalties** are still written from reward processing when net reward is negative; there is no separate penalty scheduler.
 
@@ -166,6 +167,8 @@ pauli/
 └── pkg/
     └── backoff/              # retry/backoff utility
 ```
+## Kurtosis 
+'kurtosis run --enclave pauli-dev-network github.com/ethpandaops/ethereum-package --args-file ./krutosis-config/kurtosis-param.yaml'
 
 ## Notes
 

@@ -2,7 +2,7 @@
 
 # Beacon Node API endpoint
 # For local kurtosis / devnet use your local HTTP port, e.g.:
-beacon_node_url: "http://127.0.0.1:60206"
+beacon_node_url: "http://127.0.0.1:56567"
 
 # Optional API key (leave empty for local nodes)
 beacon_api_key: ""
@@ -10,6 +10,7 @@ beacon_api_key: ""
 # List of validator indices to monitor
 validators:
   - 3
+  - 10
 
 # Polling interval in slots (1 slot = 12 seconds)
 polling_interval_slots: 1

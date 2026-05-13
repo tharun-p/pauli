@@ -179,12 +179,21 @@ func (c *Client) readDoRequestResponse(resp *http.Response, method, path string,
 		if len(bodyPreview) > 200 {
 			bodyPreview = bodyPreview[:200] + "..."
 		}
-		log.Error().
-			Int("status", resp.StatusCode).
-			Str("path", path).
-			Str("body_preview", bodyPreview).
-			Msg("beacon API non-success status")
-		return false, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, bodyPreview)
+		httpErr := &HTTPResponseError{StatusCode: resp.StatusCode, Path: path, Body: bodyPreview}
+		if resp.StatusCode == http.StatusNotFound {
+			log.Warn().
+				Int("status", resp.StatusCode).
+				Str("path", path).
+				Str("body_preview", bodyPreview).
+				Msg("beacon API not found")
+		} else {
+			log.Error().
+				Int("status", resp.StatusCode).
+				Str("path", path).
+				Str("body_preview", bodyPreview).
+				Msg("beacon API non-success status")
+		}
+		return false, httpErr
 	}
 
 	log.Debug().

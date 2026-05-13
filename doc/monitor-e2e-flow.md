@@ -1,6 +1,6 @@
 # Monitor E2E Interaction Flow
 
-Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing, **lastEpoch** for boundary dedup, and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — **sync** steps run entirely on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**. Historical catch-up / backfill is **not** implemented yet. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
+Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing and **`lastProcessedSlot`** (updated only by the final **RecordLastProcessedSlot** step after a successful chain pass), and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — each step’s **`Run`** runs on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**, and workers run **`RunAsync`** (e.g. validator snapshots, attestation rewards). Historical catch-up / backfill is **not** implemented yet. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
 
 ```mermaid
 flowchart TD
@@ -19,7 +19,7 @@ flowchart TD
 
   Enqueue["pool.Enqueue(ctx, steps.Job)"] --> WorkerN[Worker goroutines]
   WorkerN --> Process["Step.RunAsync(ctx, &job.Env)"]
-  Process --> Snap["snapshots / duties / rewards"]
+  Process --> Snap["snapshots / rewards"]
   Snap --> Repo[repo Save* methods]
 
   Stop["Monitor.Stop(drainCtx)"] --> WaitRt["monitor wg.Wait: realtime runner exits"]
@@ -34,7 +34,7 @@ flowchart TD
 flowchart LR
   A["realtime Runner.Start"] --> B["BeforeStep: WaitPollInterval"]
   B --> C["StepChain: steps/realtime"]
-  C --> D["Sync: Run only; Async: Run then maybe Enqueue Job"]
+  C --> D["Each Step.Run on runner; async steps may Enqueue Job"]
   D --> E["pool workers"]
   E --> F["RunAsync"]
   F --> G["Persist"]
@@ -42,7 +42,7 @@ flowchart LR
   H --> B
 ```
 
-**In one sentence:** `runner/realtime.Runner` wires wait + **`steps/realtime`** step chain — **GetValidatorDetails** (sync: head, validator copy, boundary plan); then **ValidatorsBalanceAtSlot**, **ValidatorDuties**, **AttestationRewardsAtBoundary** (async; enqueue a **Job** when **`Run` schedules work).
+**In one sentence:** `runner/realtime.Runner` wires wait + **`steps/realtime`** step chain — **RealtimeEnvBootstrap** (head + validators on **`Env`**); then **ValidatorsBalanceAtSlot**, **AttestationRewards** (async when each step’s **`Run`** enqueues), then **RecordLastProcessedSlot** (sync: commits **`lastProcessedSlot`** for head dedup on the next poll).
 
 ## Module and package call graph
 
@@ -76,13 +76,13 @@ flowchart LR
 
 1. `runner/realtime.Runner.Start(ctx)` calls `runner.Run(ctx, m)` until `ctx` is done.
 2. `BeforeStep`: `BlockchainNetwork.WaitPollInterval`.
-3. `StepChain`: **`steps/realtime`** — **GetValidatorDetails** (sync, runner-owned `lastEpoch`), **ValidatorsBalanceAtSlot**, **ValidatorDuties**, **AttestationRewardsAtBoundary** (async).
+3. `StepChain`: **`steps/realtime`** — **RealtimeEnvBootstrap** (sync), **ValidatorsBalanceAtSlot**, **AttestationRewards** (async; may enqueue), **RecordLastProcessedSlot** (sync).
 4. `runner.Run`: `m.Env()` then `Reset(ctx)`, then each `steps.Step.Run(env)`; if **`Async()`** and **`Run` returns `enqueue=true`**, it **`m.Enqueue` / `pool.Enqueue`** a **`steps.Job{Step, Env.Clone()}`**.
 
 ## Execution path
 
 1. Workers dequeue **`steps.Job`**.
-2. **`Step.RunAsync(ctx, &job.Env)`** runs the async body (snapshots, duties, or rewards in `internal/monitor/steps/realtime`).
+2. **`Step.RunAsync(ctx, &job.Env)`** runs the async body (snapshots or attestation rewards in `internal/monitor/steps/realtime`).
 3. Data is written through `storage.Repository` (failures log at **error** by default; more detail with `-debug`).
 
 ## Shutdown

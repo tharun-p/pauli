@@ -6,7 +6,8 @@ import (
 )
 
 // GetAttestationRewards fetches attestation rewards for validators in an epoch.
-// The epoch must be finalized for rewards to be available.
+// Nodes typically require the epoch to be finalized (past fork-choice finalized checkpoint)
+// before state is available; callers should gate on finalized epoch where appropriate.
 func (c *Client) GetAttestationRewards(ctx context.Context, epoch uint64, validatorIndices []uint64) (*AttestationRewardsData, error) {
 	path := fmt.Sprintf("/eth/v1/beacon/rewards/attestations/%d", epoch)
 
