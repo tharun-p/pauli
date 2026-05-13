@@ -55,6 +55,36 @@ func (c *Client) GetBlockExecutionBlockNumber(ctx context.Context, blockID strin
 	return &n, nil
 }
 
+// SyncCommitteeRewardsResult is the decoded sync committee rewards response for one block.
+type SyncCommitteeRewardsResult struct {
+	Rows                []SyncCommitteeRewardRow
+	ExecutionOptimistic bool
+	Finalized           bool
+}
+
+// GetSyncCommitteeRewards fetches per-validator sync committee rewards for a beacon block.
+// blockID may be a slot string, "head", "finalized", genesis, or a block root (0x-prefixed hex).
+// validatorIndices limits the response to those validators (decimal string body per spec).
+func (c *Client) GetSyncCommitteeRewards(ctx context.Context, blockID string, validatorIndices []uint64) (*SyncCommitteeRewardsResult, error) {
+	path := fmt.Sprintf("/eth/v1/beacon/rewards/sync_committee/%s", url.PathEscape(blockID))
+
+	indices := make([]string, len(validatorIndices))
+	for i, idx := range validatorIndices {
+		indices[i] = fmt.Sprintf("%d", idx)
+	}
+
+	var resp SyncCommitteeRewardsResponse
+	if err := c.post(ctx, path, indices, &resp); err != nil {
+		return nil, fmt.Errorf("failed to get sync committee rewards for %s: %w", blockID, err)
+	}
+
+	return &SyncCommitteeRewardsResult{
+		Rows:                resp.Data,
+		ExecutionOptimistic: resp.ExecutionOptimistic,
+		Finalized:           resp.Finalized,
+	}, nil
+}
+
 // GetAttestationRewardsMap fetches attestation rewards and returns them as a map keyed by validator index.
 func (c *Client) GetAttestationRewardsMap(ctx context.Context, epoch uint64, validatorIndices []uint64) (map[uint64]*AttestationReward, error) {
 	resp, err := c.GetAttestationRewards(ctx, epoch, validatorIndices)

@@ -229,6 +229,47 @@ func (r *Repository) SaveBlockProposerRewards(ctx context.Context, rows []*stora
 	return nil
 }
 
+// SaveSyncCommitteeReward upserts a sync committee reward row.
+func (r *Repository) SaveSyncCommitteeReward(ctx context.Context, row *storage.SyncCommitteeReward) error {
+	if row.Timestamp.IsZero() {
+		row.Timestamp = time.Now().UTC()
+	}
+
+	const query = `
+		INSERT INTO sync_committee_rewards (
+			validator_index, slot, reward_gwei, execution_optimistic, finalized, timestamp
+		) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (validator_index, slot) DO UPDATE SET
+			reward_gwei = EXCLUDED.reward_gwei,
+			execution_optimistic = EXCLUDED.execution_optimistic,
+			finalized = EXCLUDED.finalized,
+			timestamp = EXCLUDED.timestamp
+	`
+
+	_, err := r.client.Pool.Exec(ctx, query,
+		row.ValidatorIndex,
+		row.Slot,
+		row.RewardGwei,
+		row.ExecutionOptimistic,
+		row.Finalized,
+		row.Timestamp,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save sync committee reward: %w", err)
+	}
+	return nil
+}
+
+// SaveSyncCommitteeRewards saves multiple sync committee reward rows.
+func (r *Repository) SaveSyncCommitteeRewards(ctx context.Context, rows []*storage.SyncCommitteeReward) error {
+	for _, row := range rows {
+		if err := r.SaveSyncCommitteeReward(ctx, row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SaveValidatorPenalty saves a validator penalty to the database.
 func (r *Repository) SaveValidatorPenalty(ctx context.Context, penalty *storage.ValidatorPenalty) error {
 	if penalty.Timestamp.IsZero() {

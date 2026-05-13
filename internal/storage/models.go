@@ -43,6 +43,16 @@ type BlockProposerReward struct {
 	Timestamp       time.Time `json:"timestamp"`
 }
 
+// SyncCommitteeReward is one row of sync committee reward for a validator at a beacon block slot.
+type SyncCommitteeReward struct {
+	ValidatorIndex      uint64    `json:"validator_index"`
+	Slot                uint64    `json:"slot"`
+	RewardGwei          int64     `json:"reward_gwei"`
+	ExecutionOptimistic bool      `json:"execution_optimistic"`
+	Finalized           bool      `json:"finalized"`
+	Timestamp           time.Time `json:"timestamp"`
+}
+
 // ValidatorPenalty represents a penalty applied to a validator.
 type ValidatorPenalty struct {
 	ValidatorIndex uint64    `json:"validator_index"`
