@@ -85,6 +85,16 @@ type BlockRewardsData struct {
 // BlockRewardsResponse is the response from /eth/v1/beacon/rewards/blocks/{block_id}.
 type BlockRewardsResponse = APIResponse[BlockRewardsData]
 
+// SyncCommitteeRewardRow is one validator's sync committee reward for a block from
+// POST /eth/v1/beacon/rewards/sync_committee/{block_id}.
+type SyncCommitteeRewardRow struct {
+	ValidatorIndex Uint64Str `json:"validator_index"`
+	Reward         Int64Str  `json:"reward"` // gwei; may be negative per spec
+}
+
+// SyncCommitteeRewardsResponse is the response from POST /eth/v1/beacon/rewards/sync_committee/{block_id}.
+type SyncCommitteeRewardsResponse = APIResponse[[]SyncCommitteeRewardRow]
+
 // blockV2ExecutionNumberJSON unmarshals only execution_payload.block_number from
 // GET /eth/v2/beacon/blocks/{block_id} for a lightweight execution layer reference.
 type blockV2ExecutionNumberJSON struct {
