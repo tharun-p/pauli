@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ethereal Vault | Validator Monitor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-highest": "#262627",
+                        "secondary-fixed-dim": "#e1b2ff",
+                        "on-secondary-container": "#fff5ff",
+                        "on-background": "#ffffff",
+                        "on-error-container": "#ffa8a3",
+                        "surface-tint": "#8ff5ff",
+                        "secondary": "#c97cff",
+                        "primary-fixed": "#00eefc",
+                        "surface-container": "#1a191b",
+                        "on-secondary": "#350056",
+                        "on-tertiary-container": "#005c3b",
+                        "on-error": "#490006",
+                        "tertiary-dim": "#00efa0",
+                        "tertiary-fixed": "#00ffab",
+                        "on-primary-fixed-variant": "#005e64",
+                        "secondary-fixed": "#e9c4ff",
+                        "primary-container": "#00eefc",
+                        "on-secondary-fixed-variant": "#7c00c0",
+                        "outline": "#767576",
+                        "outline-variant": "#484849",
+                        "on-primary": "#005d63",
+                        "error-container": "#9f0519",
+                        "on-primary-container": "#005359",
+                        "error": "#ff716c",
+                        "tertiary-fixed-dim": "#00efa0",
+                        "surface-bright": "#2c2c2d",
+                        "surface": "#0e0e0f",
+                        "error-dim": "#d7383b",
+                        "tertiary-container": "#00ffab",
+                        "on-primary-fixed": "#003f43",
+                        "primary-dim": "#00deec",
+                        "inverse-surface": "#fcf8f9",
+                        "surface-container-low": "#131314",
+                        "background": "#0e0e0f",
+                        "on-tertiary-fixed": "#00472d",
+                        "primary": "#8ff5ff",
+                        "inverse-on-surface": "#565556",
+                        "surface-container-lowest": "#000000",
+                        "on-surface-variant": "#adaaab",
+                        "secondary-container": "#9000de",
+                        "on-tertiary-fixed-variant": "#006742",
+                        "on-surface": "#ffffff",
+                        "on-tertiary": "#006642",
+                        "surface-dim": "#0e0e0f",
+                        "surface-container-high": "#201f21",
+                        "surface-variant": "#262627",
+                        "primary-fixed-dim": "#00deec",
+                        "tertiary": "#afffd1",
+                        "on-secondary-fixed": "#530082",
+                        "inverse-primary": "#006a71",
+                        "secondary-dim": "#aa30fa"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(26, 25, 27, 0.6);
+            backdrop-filter: blur(24px);
+        }
+        .liquid-gradient {
+            background: linear-gradient(135deg, #8ff5ff 0%, #00eefc 100%);
+        }
+        .active-glow {
+            box-shadow: 0 0 20px rgba(143, 245, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen flex flex-col bg-zinc-950/80 backdrop-blur-xl h-full w-64 border-r border-zinc-800/30 z-[60]">
+<div class="p-8">
+<h1 class="text-2xl font-bold tracking-tighter text-cyan-400 font-headline">The Vault</h1>
+<p class="text-[10px] font-label uppercase tracking-[0.2em] text-zinc-500 mt-1">Ethereum Mainnet</p>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-cyan-400 border-r-2 border-cyan-400 bg-cyan-950/20 active-glow" href="#">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+<span class="font-medium">Validators</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="timeline">timeline</span>
+<span class="font-medium">Epochs</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-medium">Rewards</span>
+</a>
+</nav>
+<div class="p-4 mb-4">
+<button class="w-full liquid-gradient text-on-primary-container font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined text-sm" data-icon="add_circle">add_circle</span>
+                Stake ETH
+            </button>
+</div>
+<div class="p-4 border-t border-zinc-800/30">
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-2 text-sm text-zinc-500 hover:text-zinc-300 transition-colors" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="settings">settings</span>
+                    Settings
+                </a>
+<a class="flex items-center gap-3 px-4 py-2 text-sm text-zinc-500 hover:text-zinc-300 transition-colors" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="help_outline">help_outline</span>
+                    Support
+                </a>
+</div>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="flex justify-between items-center w-full px-8 py-4 sticky top-0 z-50 ml-64 bg-zinc-950/50 backdrop-blur-md">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-cyan-400 font-headline">Ethereal Vault</span>
+<div class="hidden lg:flex items-center gap-6">
+<span class="text-zinc-400 text-sm font-label flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary shadow-[0_0_8px_rgba(175,255,209,0.6)]"></span>
+                    Network
+                </span>
+<span class="text-zinc-400 text-sm font-label">Gas: 12 gwei</span>
+<span class="text-zinc-400 text-sm font-label">Block: 18.4M</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-zinc-400">
+<button class="hover:text-cyan-300 transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span>
+</button>
+<button class="hover:text-cyan-300 transition-colors">
+<span class="material-symbols-outlined" data-icon="sensors">sensors</span>
+</button>
+</div>
+<button class="bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-primary px-5 py-2 rounded-lg font-medium transition-all text-sm">
+                Connect Wallet
+            </button>
+<div class="w-10 h-10 rounded-full border border-primary/20 p-0.5">
+<img alt="Validator Admin" class="w-full h-full rounded-full bg-zinc-800" data-alt="Stylized 3D avatar of a technical administrator with high-tech glowing glasses and futuristic outfit, cyberpunk aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsm_CopoYY1DeZN8a2VpiTRm5yOcVAHzIRHbseUXJJKt5okHdX9nE6Q5-y6J3QzbqnzwMr8vLvuUDZ__wj0c1IMgiO79fJK88qqCz9rNrorC4Wn2Z1DSQnakneWxYnJNxeZ2EZCmjsNRbM13u_NZ2JBJLa0uvEpRw_iBXSv0F7zHFhpK7ypPbgsdtpeanl7M50thpVsm2CvITKttfTTz9u_ljTfwE1rWY4FREzF-DephvHHXYLG5UXzxboIf43QwAuNDFzWREhoQIP"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 p-10 min-h-screen">
+<div class="max-w-6xl mx-auto">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-10">
+<div>
+<h2 class="text-4xl font-bold font-headline mb-2">Validator Monitor</h2>
+<p class="text-on-surface-variant font-body">Real-time health and performance metrics for your active nodes.</p>
+</div>
+<div class="flex gap-4">
+<div class="glass-panel px-6 py-4 rounded-xl border border-outline-variant/10">
+<p class="text-[10px] font-label text-zinc-500 uppercase tracking-widest mb-1">Total Stake</p>
+<p class="text-2xl font-bold font-headline text-primary">192.00 ETH</p>
+</div>
+<div class="glass-panel px-6 py-4 rounded-xl border border-outline-variant/10">
+<p class="text-[10px] font-label text-zinc-500 uppercase tracking-widest mb-1">Avg APY</p>
+<p class="text-2xl font-bold font-headline text-tertiary">4.2%</p>
+</div>
+</div>
+</div>
+<!-- Validator Table -->
+<div class="rounded-2xl overflow-hidden border border-outline-variant/10 glass-panel">
+<table class="w-full border-collapse text-left">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="px-8 py-5 text-xs font-label uppercase tracking-widest text-zinc-500">Validator ID</th>
+<th class="px-6 py-5 text-xs font-label uppercase tracking-widest text-zinc-500">Status</th>
+<th class="px-6 py-5 text-xs font-label uppercase tracking-widest text-zinc-500">Balance</th>
+<th class="px-6 py-5 text-xs font-label uppercase tracking-widest text-zinc-500">Epoch Rewards (24h)</th>
+<th class="px-6 py-5 text-xs font-label uppercase tracking-widest text-zinc-500">Payouts</th>
+<th class="px-8 py-5 text-xs font-label uppercase tracking-widest text-zinc-500 text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<!-- Row 1 -->
+<tr class="group hover:bg-primary/5 transition-all duration-300">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-2 h-8 bg-primary rounded-full opacity-20 group-hover:opacity-100 transition-opacity"></div>
+<div>
+<p class="font-headline font-bold text-on-surface">VAL-88214</p>
+<p class="text-xs font-label text-on-surface-variant">0x71C...4e21</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-6">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_12px_rgba(175,255,209,0.8)]"></span>
+<span class="text-tertiary text-sm font-medium">Active</span>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="font-headline text-lg font-bold">32.45 ETH</p>
+</td>
+<td class="px-6 py-6">
+<p class="text-tertiary-fixed-dim font-medium">+0.0042 ETH</p>
+<div class="w-24 h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-tertiary w-[85%]"></div>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="text-sm font-label text-zinc-400">Weekly</p>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="text-xs font-bold uppercase tracking-tighter text-primary border border-primary/20 px-4 py-2 rounded-lg hover:bg-primary hover:text-on-primary transition-all">
+                                    View Analytics
+                                </button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-primary/5 transition-all duration-300">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-2 h-8 bg-primary rounded-full opacity-20 group-hover:opacity-100 transition-opacity"></div>
+<div>
+<p class="font-headline font-bold text-on-surface">VAL-92041</p>
+<p class="text-xs font-label text-on-surface-variant">0x3fA...91bc</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-6">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-fixed-dim shadow-[0_0_12px_rgba(201,124,255,0.8)]"></span>
+<span class="text-secondary-fixed-dim text-sm font-medium">Pending</span>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="font-headline text-lg font-bold">32.00 ETH</p>
+</td>
+<td class="px-6 py-6">
+<p class="text-zinc-500 font-medium">0.0000 ETH</p>
+<div class="w-24 h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-zinc-700 w-[10%]"></div>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="text-sm font-label text-zinc-400">Monthly</p>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="text-xs font-bold uppercase tracking-tighter text-primary border border-primary/20 px-4 py-2 rounded-lg hover:bg-primary hover:text-on-primary transition-all">
+                                    View Analytics
+                                </button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-primary/5 transition-all duration-300">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-2 h-8 bg-primary rounded-full opacity-20 group-hover:opacity-100 transition-opacity"></div>
+<div>
+<p class="font-headline font-bold text-on-surface">VAL-84511</p>
+<p class="text-xs font-label text-on-surface-variant">0x882...cf11</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-6">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_12px_rgba(175,255,209,0.8)]"></span>
+<span class="text-tertiary text-sm font-medium">Active</span>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="font-headline text-lg font-bold">32.88 ETH</p>
+</td>
+<td class="px-6 py-6">
+<p class="text-tertiary-fixed-dim font-medium">+0.0048 ETH</p>
+<div class="w-24 h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-tertiary w-[95%]"></div>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="text-sm font-label text-zinc-400">Weekly</p>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="text-xs font-bold uppercase tracking-tighter text-primary border border-primary/20 px-4 py-2 rounded-lg hover:bg-primary hover:text-on-primary transition-all">
+                                    View Analytics
+                                </button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="group hover:bg-primary/5 transition-all duration-300">
+<td class="px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="w-2 h-8 bg-primary rounded-full opacity-20 group-hover:opacity-100 transition-opacity"></div>
+<div>
+<p class="font-headline font-bold text-on-surface">VAL-77104</p>
+<p class="text-xs font-label text-on-surface-variant">0xbb1...00ae</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-6">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_12px_rgba(175,255,209,0.8)]"></span>
+<span class="text-tertiary text-sm font-medium">Active</span>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="font-headline text-lg font-bold">32.12 ETH</p>
+</td>
+<td class="px-6 py-6">
+<p class="text-tertiary-fixed-dim font-medium">+0.0039 ETH</p>
+<div class="w-24 h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-tertiary w-[70%]"></div>
+</div>
+</td>
+<td class="px-6 py-6">
+<p class="text-sm font-label text-zinc-400">Instant</p>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="text-xs font-bold uppercase tracking-tighter text-primary border border-primary/20 px-4 py-2 rounded-lg hover:bg-primary hover:text-on-primary transition-all">
+                                    View Analytics
+                                </button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Performance Bento Stats -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="glass-panel p-8 rounded-2xl border border-outline-variant/10 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl text-primary" data-icon="hub">hub</span>
+</div>
+<p class="text-xs font-label text-zinc-500 uppercase tracking-widest mb-2">Network Uptime</p>
+<h3 class="text-4xl font-headline font-bold text-on-surface">99.98%</h3>
+<div class="mt-4 flex gap-1">
+<div class="h-1 flex-1 bg-tertiary rounded-full"></div>
+<div class="h-1 flex-1 bg-tertiary rounded-full"></div>
+<div class="h-1 flex-1 bg-tertiary rounded-full"></div>
+<div class="h-1 flex-1 bg-tertiary rounded-full"></div>
+<div class="h-1 flex-1 bg-zinc-700 rounded-full"></div>
+</div>
+</div>
+<div class="glass-panel p-8 rounded-2xl border border-outline-variant/10 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl text-secondary" data-icon="speed">speed</span>
+</div>
+<p class="text-xs font-label text-zinc-500 uppercase tracking-widest mb-2">Attestation Rate</p>
+<h3 class="text-4xl font-headline font-bold text-on-surface">100%</h3>
+<p class="text-xs text-tertiary mt-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="trending_up">trending_up</span>
+                        Optimized latency
+                    </p>
+</div>
+<div class="glass-panel p-8 rounded-2xl border border-outline-variant/10 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl text-tertiary" data-icon="verified_user">verified_user</span>
+</div>
+<p class="text-xs font-label text-zinc-500 uppercase tracking-widest mb-2">Risk Score</p>
+<h3 class="text-4xl font-headline font-bold text-on-surface">Low</h3>
+<p class="text-xs text-zinc-400 mt-4">0 slashing events detected</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Decorative Background Elements -->
+<div class="fixed top-0 left-0 w-full h-full pointer-events-none -z-10 overflow-hidden">
+<div class="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-10%] left-[20%] w-[600px] h-[600px] bg-secondary/5 blur-[150px] rounded-full"></div>
+</div>
+</body></html>

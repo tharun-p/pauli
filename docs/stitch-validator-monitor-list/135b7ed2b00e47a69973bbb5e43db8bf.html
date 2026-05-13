@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#262627",
+              "secondary-fixed-dim": "#e1b2ff",
+              "on-secondary-container": "#fff5ff",
+              "on-background": "#ffffff",
+              "on-error-container": "#ffa8a3",
+              "surface-tint": "#8ff5ff",
+              "secondary": "#c97cff",
+              "primary-fixed": "#00eefc",
+              "surface-container": "#1a191b",
+              "on-secondary": "#350056",
+              "on-tertiary-container": "#005c3b",
+              "on-error": "#490006",
+              "tertiary-dim": "#00efa0",
+              "tertiary-fixed": "#00ffab",
+              "on-primary-fixed-variant": "#005e64",
+              "secondary-fixed": "#e9c4ff",
+              "primary-container": "#00eefc",
+              "on-secondary-fixed-variant": "#7c00c0",
+              "outline": "#767576",
+              "outline-variant": "#484849",
+              "on-primary": "#005d63",
+              "error-container": "#9f0519",
+              "on-primary-container": "#005359",
+              "error": "#ff716c",
+              "tertiary-fixed-dim": "#00efa0",
+              "surface-bright": "#2c2c2d",
+              "surface": "#0e0e0f",
+              "error-dim": "#d7383b",
+              "tertiary-container": "#00ffab",
+              "on-primary-fixed": "#003f43",
+              "primary-dim": "#00deec",
+              "inverse-surface": "#fcf8f9",
+              "surface-container-low": "#131314",
+              "background": "#0e0e0f",
+              "on-tertiary-fixed": "#00472d",
+              "primary": "#8ff5ff",
+              "inverse-on-surface": "#565556",
+              "surface-container-lowest": "#000000",
+              "on-surface-variant": "#adaaab",
+              "secondary-container": "#9000de",
+              "on-tertiary-fixed-variant": "#006742",
+              "on-surface": "#ffffff",
+              "on-tertiary": "#006642",
+              "surface-dim": "#0e0e0f",
+              "surface-container-high": "#201f21",
+              "surface-variant": "#262627",
+              "primary-fixed-dim": "#00deec",
+              "tertiary": "#afffd1",
+              "on-secondary-fixed": "#530082",
+              "inverse-primary": "#006a71",
+              "secondary-dim": "#aa30fa"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(26, 25, 27, 0.4);
+            backdrop-filter: blur(24px);
+        }
+        .neon-glow-primary {
+            box-shadow: 0 0 15px rgba(143, 245, 255, 0.08);
+        }
+        .chart-gradient {
+            background: linear-gradient(to bottom, rgba(143, 245, 255, 0.15), transparent);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen flex flex-col bg-zinc-950/80 backdrop-blur-xl h-full w-64 border-r border-zinc-800/30 z-50">
+<div class="p-8">
+<h1 class="text-2xl font-bold tracking-tighter text-cyan-400 font-headline">The Vault</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-label mt-1">Ethereum Mainnet</p>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 transition-all duration-300 group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 transition-all duration-300 group" href="#">
+<span class="material-symbols-outlined">security</span>
+<span class="font-medium">Validators</span>
+</a>
+<!-- Active State: Epochs -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-cyan-400 border-r-2 border-cyan-400 bg-cyan-950/20 transition-all duration-300 group neon-glow-primary" href="#">
+<span class="material-symbols-outlined">timeline</span>
+<span class="font-medium">Epochs</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 transition-all duration-300 group" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-medium">Rewards</span>
+</a>
+</nav>
+<div class="p-4 mt-auto border-t border-zinc-800/30">
+<button class="w-full py-3 px-4 bg-gradient-to-br from-primary to-primary-container text-on-primary-container font-bold rounded-xl hover:scale-[0.98] transition-transform duration-300 mb-6">
+                Stake ETH
+            </button>
+<div class="space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-zinc-300 font-label text-sm" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+                    Settings
+                </a>
+<a class="flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-zinc-300 font-label text-sm" href="#">
+<span class="material-symbols-outlined text-lg">help_outline</span>
+                    Support
+                </a>
+</div>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="flex justify-between items-center w-full px-8 py-4 sticky top-0 z-40 ml-64 bg-zinc-950/50 backdrop-blur-md">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-cyan-400 font-headline">Ethereal Vault</span>
+<div class="hidden lg:flex gap-6 text-xs font-label uppercase tracking-widest text-zinc-400">
+<span class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Network</span>
+<span class="text-on-surface">Gas: 12 gwei</span>
+<span class="text-on-surface">Block: 18.4M</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-zinc-400">
+<span class="material-symbols-outlined hover:text-cyan-300 transition-colors cursor-pointer">notifications_active</span>
+<span class="material-symbols-outlined hover:text-cyan-300 transition-colors cursor-pointer">sensors</span>
+</div>
+<button class="px-6 py-2 border border-outline-variant/30 rounded-full text-primary font-bold hover:bg-primary/10 transition-colors">
+                Connect Wallet
+            </button>
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden border border-outline-variant/20">
+<img alt="Validator Admin" class="w-full h-full object-cover" data-alt="Close up portrait of a futuristic digital human avatar with neon blue accents and technical overlays" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiPnU-CPp2JVvSvGZXqLxqRsPx_HaSybKHBwMlZRRT-4cyA5uGnVEt-CdIZY-mu_8v6PAglyc_dWhhPBL8M4k2YZU8LjaF7C3BgVwmLMOUfkzruXZMwvqQlZCiA6VBLVERvTE7csKTLx3gSbsheRQXPXv9KAGMS-qTuufkpujo_vO9tNwHvVbjkYjDIa1Nca-VEOfO6NJoFsJAp_5Lf1Wz-TxF_t_uPRbe1MmIoQ_A5U9gybu_4zqqR-M6CHI_q2-A8YILmATykKFl"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 p-10 min-h-screen">
+<!-- Breadcrumbs & Header -->
+<div class="mb-10">
+<div class="flex items-center gap-2 text-on-surface-variant font-label text-xs uppercase tracking-widest mb-4">
+<span>Validators</span>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+<span>0x7a...4e2d</span>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+<span class="text-primary">Epoch Performance</span>
+</div>
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-5xl font-bold font-headline tracking-tighter mb-2">Epoch Analytics</h2>
+<p class="text-on-surface-variant max-w-xl font-body">Real-time performance metrics for Validator #842,910. Monitoring attestation accuracy and block proposal yield.</p>
+</div>
+<div class="text-right">
+<div class="text-[10px] text-on-surface-variant font-label uppercase tracking-[0.2em]">Effective Balance</div>
+<div class="text-3xl font-headline font-bold text-tertiary">32.0482 ETH</div>
+</div>
+</div>
+</div>
+<!-- High Fidelity Performance Graph Section -->
+<section class="mb-12">
+<div class="glass-panel p-8 rounded-3xl border border-outline-variant/10 neon-glow-primary relative overflow-hidden">
+<!-- Decorative Grid Background -->
+<div class="absolute inset-0 pointer-events-none opacity-5" style="background-image: radial-gradient(circle at 2px 2px, #8ff5ff 1px, transparent 0); background-size: 40px 40px;"></div>
+<div class="flex justify-between items-center mb-8 relative z-10">
+<h3 class="font-headline font-bold text-xl flex items-center gap-2">
+<span class="w-2 h-6 bg-primary rounded-full"></span>
+                        Reward Trajectory (Last 100 Epochs)
+                    </h3>
+<div class="flex gap-4">
+<div class="flex items-center gap-2 bg-surface-container-low px-4 py-2 rounded-full border border-outline-variant/10">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-xs font-label text-on-surface-variant">Attestation</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-low px-4 py-2 rounded-full border border-outline-variant/10">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-xs font-label text-on-surface-variant">Proposals</span>
+</div>
+</div>
+</div>
+<!-- Simulated Line Graph -->
+<div class="h-[400px] w-full relative group">
+<!-- SVG Path for the graph -->
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 1000 400">
+<defs>
+<lineargradient id="gradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#8ff5ff" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#8ff5ff" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<!-- Area Fill -->
+<path d="M0,350 L50,340 L100,360 L150,310 L200,320 L250,280 L300,300 L350,240 L400,260 L450,180 L500,210 L550,150 L600,170 L650,120 L700,140 L750,100 L800,110 L850,60 L900,80 L950,40 L1000,50 L1000,400 L0,400 Z" fill="url(#gradient)"></path>
+<!-- Line -->
+<path class="drop-shadow-[0_0_8px_rgba(143,245,255,0.6)]" d="M0,350 L50,340 L100,360 L150,310 L200,320 L250,280 L300,300 L350,240 L400,260 L450,180 L500,210 L550,150 L600,170 L650,120 L700,140 L750,100 L800,110 L850,60 L900,80 L950,40 L1000,50" fill="none" stroke="#8ff5ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+<!-- Interactivity Markers -->
+<circle class="animate-pulse" cx="950" cy="40" fill="#8ff5ff" r="6"></circle>
+<line opacity="0.4" stroke="#8ff5ff" stroke-dasharray="4" stroke-width="1" x1="950" x2="950" y1="0" y2="400"></line>
+</svg>
+<!-- Hover Tooltip Simulation -->
+<div class="absolute top-4 right-[5%] bg-surface-bright p-4 rounded-xl border border-primary/20 shadow-2xl z-20 pointer-events-none">
+<div class="text-[10px] text-on-surface-variant font-label uppercase tracking-widest mb-1">Epoch 184,402</div>
+<div class="text-lg font-headline font-bold text-primary">+0.0034 ETH</div>
+<div class="text-[10px] text-tertiary-dim font-label">Attestation Success</div>
+</div>
+</div>
+<div class="flex justify-between mt-6 text-[10px] font-label text-on-surface-variant uppercase tracking-widest">
+<span>184,302</span>
+<span>184,327</span>
+<span>184,352</span>
+<span>184,377</span>
+<span class="text-primary">Latest: 184,402</span>
+</div>
+</div>
+</section>
+<!-- Epoch Log Table Section -->
+<section>
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline font-bold text-2xl tracking-tight">Recent Activity Log</h3>
+<div class="flex gap-2">
+<button class="px-4 py-2 text-xs font-label uppercase tracking-widest text-on-surface-variant bg-surface-container rounded-lg border border-outline-variant/10 hover:text-on-surface transition-colors">Download CSV</button>
+<button class="px-4 py-2 text-xs font-label uppercase tracking-widest text-on-surface-variant bg-surface-container rounded-lg border border-outline-variant/10 hover:text-on-surface transition-colors">Filter</button>
+</div>
+</div>
+<div class="overflow-hidden rounded-3xl border border-outline-variant/5">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant/10">
+<tr>
+<th class="px-8 py-5 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Epoch Number</th>
+<th class="px-8 py-5 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Status</th>
+<th class="px-8 py-5 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Reward Amount</th>
+<th class="px-8 py-5 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Inclusion Distance</th>
+<th class="px-8 py-5 text-right text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Time</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<!-- Row 1: Proposer -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,402</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-widest rounded-full border border-secondary/20">Proposer</span>
+<span class="text-tertiary-dim text-xs">● Active</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim text-lg">+0.0421 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">0 blocks</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">6 min ago</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,401</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">12 min ago</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,400</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">18 min ago</td>
+</tr>
+<!-- Row 4 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,399</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0033 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">24 min ago</td>
+</tr>
+<!-- Row 5 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,398</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">30 min ago</td>
+</tr>
+<!-- Row 6 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,397</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">36 min ago</td>
+</tr>
+<!-- Row 7 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,396</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">2 blocks</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">42 min ago</td>
+</tr>
+<!-- Row 8 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,395</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">48 min ago</td>
+</tr>
+<!-- Row 9 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,394</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">54 min ago</td>
+</tr>
+<!-- Row 10 -->
+<tr class="group hover:bg-surface-container transition-colors">
+<td class="px-8 py-6">
+<span class="font-headline font-medium text-on-surface">184,393</span>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<span class="text-tertiary-dim text-xs">● Attested</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-headline font-bold text-tertiary-dim">+0.0034 ETH</span>
+</td>
+<td class="px-8 py-6 font-label text-on-surface-variant">1 block</td>
+<td class="px-8 py-6 text-right font-label text-on-surface-variant">60 min ago</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="mt-8 flex justify-center">
+<button class="flex items-center gap-2 text-primary font-label text-xs uppercase tracking-widest hover:underline group">
+                    View full history 
+                    <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Background Decorative Elements -->
+<div class="fixed bottom-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+<div class="fixed top-1/4 left-1/4 w-[300px] h-[300px] bg-secondary/5 blur-[100px] rounded-full pointer-events-none -z-10"></div>
+</body></html>

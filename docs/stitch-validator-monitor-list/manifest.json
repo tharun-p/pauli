@@ -1,0 +1,77 @@
+{
+  "projectId": "13758647080274697556",
+  "projectTitle": "Validator Monitor List",
+  "downloadedAt": "2026-05-13T18:36:39.513Z",
+  "screens": [
+    {
+      "screenId": "8d4e135bc1a94ab8bb6b898293bc6ee2",
+      "title": "Validator Monitor List",
+      "name": "projects/13758647080274697556/screens/8d4e135bc1a94ab8bb6b898293bc6ee2",
+      "deviceType": "MOBILE",
+      "width": "390",
+      "height": "884",
+      "htmlFile": "8d4e135bc1a94ab8bb6b898293bc6ee2.html",
+      "pngFile": null
+    },
+    {
+      "screenId": "112e5af2c0844649bc4569fa1732969e",
+      "title": "Untitled Prototype",
+      "name": "projects/13758647080274697556/screens/112e5af2c0844649bc4569fa1732969e",
+      "deviceType": "MOBILE",
+      "width": "390",
+      "height": "884",
+      "htmlFile": "112e5af2c0844649bc4569fa1732969e.html",
+      "pngFile": null
+    },
+    {
+      "screenId": "168f090096654fecb304db680735bf49",
+      "title": "Rewards & Payouts History",
+      "name": "projects/13758647080274697556/screens/168f090096654fecb304db680735bf49",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2930",
+      "htmlFile": "168f090096654fecb304db680735bf49.html",
+      "pngFile": "168f090096654fecb304db680735bf49.png"
+    },
+    {
+      "screenId": "90b551d328a44917883fb9b320c6decc",
+      "title": "Staking Overview Dashboard",
+      "name": "projects/13758647080274697556/screens/90b551d328a44917883fb9b320c6decc",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2616",
+      "htmlFile": "90b551d328a44917883fb9b320c6decc.html",
+      "pngFile": "90b551d328a44917883fb9b320c6decc.png"
+    },
+    {
+      "screenId": "135b7ed2b00e47a69973bbb5e43db8bf",
+      "title": "Epoch Performance Analytics",
+      "name": "projects/13758647080274697556/screens/135b7ed2b00e47a69973bbb5e43db8bf",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "3726",
+      "htmlFile": "135b7ed2b00e47a69973bbb5e43db8bf.html",
+      "pngFile": "135b7ed2b00e47a69973bbb5e43db8bf.png"
+    },
+    {
+      "screenId": "e3148176f8d641e590cc7a392ef77e42",
+      "title": "Untitled Prototype",
+      "name": "projects/13758647080274697556/screens/e3148176f8d641e590cc7a392ef77e42",
+      "deviceType": "MOBILE",
+      "width": "390",
+      "height": "884",
+      "htmlFile": "e3148176f8d641e590cc7a392ef77e42.html",
+      "pngFile": null
+    },
+    {
+      "screenId": "8d4d3c8925ec45a1825f2bb8758b5d1b",
+      "title": "Validator Monitor List",
+      "name": "projects/13758647080274697556/screens/8d4d3c8925ec45a1825f2bb8758b5d1b",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2192",
+      "htmlFile": "8d4d3c8925ec45a1825f2bb8758b5d1b.html",
+      "pngFile": "8d4d3c8925ec45a1825f2bb8758b5d1b.png"
+    }
+  ]
+}
