@@ -1,0 +1,666 @@
+openapi: 3.0.3
+info:
+  title: Pauli API
+  description: |
+    Read-only HTTP API for validator data indexed by Pauli into PostgreSQL.
+    All list responses use a `data` array and `meta` object with `limit`, `offset`, and `count`
+    (number of rows returned in this page).
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local pauli-api
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness and database connectivity
+      operationId: healthz
+      responses:
+        "200":
+          description: Store health check passed
+        "503":
+          description: Database unavailable
+
+  /openapi.yaml:
+    get:
+      summary: OpenAPI specification (YAML)
+      operationId: getOpenAPISpec
+      responses:
+        "200":
+          description: YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /v1/validators:
+    get:
+      summary: List validator indices that have snapshot rows
+      operationId: listValidators
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated list of validator_index values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidatorIndexListResponse"
+
+  /v1/validators/{validatorIndex}/snapshots/latest:
+    get:
+      summary: Latest snapshot for a validator
+      operationId: getLatestSnapshot
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+      responses:
+        "200":
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidatorSnapshot"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/validators/{validatorIndex}/snapshots:
+    get:
+      summary: Snapshots for a validator in a slot range
+      operationId: listSnapshots
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+        - name: from_slot
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_slot
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated snapshots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidatorSnapshotListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/validators/{validatorIndex}/snapshots/count:
+    get:
+      summary: Number of snapshot rows for a validator
+      operationId: countSnapshots
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+      responses:
+        "200":
+          description: Count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/attestation-rewards:
+    get:
+      summary: Attestation rewards by epoch window (all validators unless filtered)
+      description: |
+        Provide either `epoch` (single epoch) or both `from_epoch` and `to_epoch` (inclusive).
+        Optionally set `validator_index` to restrict to one validator.
+      operationId: listAttestationRewards
+      parameters:
+        - name: epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/validatorIndexQuery"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated attestation rewards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttestationRewardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/block-proposer-rewards:
+    get:
+      summary: Block proposer rewards by slot window
+      description: |
+        Provide either `slot` (single slot) or both `from_slot` and `to_slot` (inclusive).
+        Optionally set `validator_index` to restrict to one validator.
+      operationId: listBlockProposerRewards
+      parameters:
+        - name: slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/validatorIndexQuery"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated block proposer rewards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockProposerRewardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/sync-committee-rewards:
+    get:
+      summary: Sync committee rewards by slot window
+      description: |
+        Provide either `slot` (single slot) or both `from_slot` and `to_slot` (inclusive).
+        Optionally set `validator_index` to restrict to one validator.
+      operationId: listSyncCommitteeRewards
+      parameters:
+        - name: slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/validatorIndexQuery"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated sync committee rewards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncCommitteeRewardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/validators/{validatorIndex}/attestation-rewards:
+    get:
+      summary: Attestation rewards for one validator (epoch window)
+      description: Same query rules as `/v1/attestation-rewards`; `validator_index` query must match path if provided.
+      operationId: listAttestationRewardsScoped
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+        - name: epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated attestation rewards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttestationRewardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/validators/{validatorIndex}/block-proposer-rewards:
+    get:
+      summary: Block proposer rewards for one validator (slot window)
+      operationId: listBlockProposerRewardsScoped
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+        - name: slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated block proposer rewards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockProposerRewardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/validators/{validatorIndex}/sync-committee-rewards:
+    get:
+      summary: Sync committee rewards for one validator (slot window)
+      operationId: listSyncCommitteeRewardsScoped
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+        - name: slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_slot
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated sync committee rewards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncCommitteeRewardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/validators/{validatorIndex}/penalties:
+    get:
+      summary: Validator penalties in an epoch range
+      operationId: listPenalties
+      parameters:
+        - $ref: "#/components/parameters/validatorIndexPath"
+        - name: epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: from_epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to_epoch
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated penalties
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidatorPenaltyListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  parameters:
+    limit:
+      name: limit
+      in: query
+      description: Page size (default 100, maximum 1000)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+    offset:
+      name: offset
+      in: query
+      description: Number of rows to skip
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    validatorIndexPath:
+      name: validatorIndex
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9]+$"
+    validatorIndexQuery:
+      name: validator_index
+      in: query
+      description: Restrict results to this validator (collection routes only)
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+
+  responses:
+    BadRequest:
+      description: Invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    ListMeta:
+      type: object
+      required: [limit, offset, count]
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        count:
+          type: integer
+          description: Number of items in `data` for this response
+
+    ValidatorSnapshot:
+      type: object
+      properties:
+        validator_index:
+          type: integer
+          format: int64
+        slot:
+          type: integer
+          format: int64
+        status:
+          type: string
+        balance:
+          type: integer
+          format: int64
+        effective_balance:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidatorSnapshotListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidatorSnapshot"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+
+    ValidatorIndexRow:
+      type: object
+      required: [validator_index]
+      properties:
+        validator_index:
+          type: integer
+          format: int64
+
+    ValidatorIndexListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidatorIndexRow"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+
+    AttestationReward:
+      type: object
+      properties:
+        validator_index:
+          type: integer
+          format: int64
+        epoch:
+          type: integer
+          format: int64
+        head_reward:
+          type: integer
+          format: int64
+        source_reward:
+          type: integer
+          format: int64
+        target_reward:
+          type: integer
+          format: int64
+        total_reward:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+
+    AttestationRewardListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttestationReward"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+
+    BlockProposerReward:
+      type: object
+      properties:
+        validator_index:
+          type: integer
+          format: int64
+        validator_pubkey:
+          type: string
+        slot_number:
+          type: integer
+          format: int64
+        block_number:
+          type: integer
+          format: int64
+          nullable: true
+        rewards:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+
+    BlockProposerRewardListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockProposerReward"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+
+    SyncCommitteeReward:
+      type: object
+      properties:
+        validator_index:
+          type: integer
+          format: int64
+        slot:
+          type: integer
+          format: int64
+        reward_gwei:
+          type: integer
+          format: int64
+        execution_optimistic:
+          type: boolean
+        finalized:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+
+    SyncCommitteeRewardListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncCommitteeReward"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+
+    ValidatorPenalty:
+      type: object
+      properties:
+        validator_index:
+          type: integer
+          format: int64
+        epoch:
+          type: integer
+          format: int64
+        slot:
+          type: integer
+          format: int64
+        penalty_type:
+          type: string
+        penalty_gwei:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidatorPenaltyListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidatorPenalty"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
