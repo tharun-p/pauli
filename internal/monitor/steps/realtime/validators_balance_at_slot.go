@@ -12,18 +12,25 @@ import (
 )
 
 // ValidatorsBalanceAtSlot (async): full validator snapshot at Env.HeadSlot; body runs on a worker.
+// Skips when HeadSlot matches LastProcessedSlot (updated by RecordLastProcessedSlot at chain end).
 type ValidatorsBalanceAtSlot struct {
-	Client     *beacon.Client
-	Repo       storage.Repository
-	Validators []uint64
-	Log        zerolog.Logger
+	Client            *beacon.Client
+	Repo              storage.Repository
+	Validators        []uint64
+	Log               zerolog.Logger
+	LastProcessedSlot *uint64
 }
 
 var _ Step = (*ValidatorsBalanceAtSlot)(nil)
 
 func (ValidatorsBalanceAtSlot) Async() bool { return true }
 
-func (ValidatorsBalanceAtSlot) Run(*steps.Env) (bool, error) { return true, nil }
+func (s ValidatorsBalanceAtSlot) Run(e *steps.Env) (bool, error) {
+	if s.LastProcessedSlot != nil && e.HeadSlot == *s.LastProcessedSlot {
+		return false, nil
+	}
+	return true, nil
+}
 
 func (s ValidatorsBalanceAtSlot) RunAsync(ctx context.Context, e *steps.Env) error {
 	return runValidatorSnapshots(ctx, s.Client, s.Repo, s.Validators, e.HeadSlot, s.Log)

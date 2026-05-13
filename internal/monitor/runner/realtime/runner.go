@@ -22,13 +22,15 @@ type Runner struct {
 	validators []uint64
 	log        zerolog.Logger
 	enqueue    func(context.Context, steps.Job) error
-	lastEpoch uint64
-	env       *steps.Env
+	// Updated only by RecordLastProcessedSlot after a full successful chain pass; other
+	// steps skip when Env.HeadSlot equals this (dedup across polls for the same head).
+	lastProcessedSlot uint64
+	env               *steps.Env
 }
 
 var _ runner.Runner = (*Runner)(nil)
 
-// New constructs a realtime runner. lastEpoch is owned here for boundary dedup.
+// New constructs a realtime runner.
 func New(
 	network *config.BlockchainNetwork,
 	client *beacon.Client,
@@ -46,7 +48,9 @@ func New(
 		validators: validators,
 		log:        log,
 		enqueue:    enqueue,
-		env:        steps.NewEnv(),
+		// Sentinel: no successful chain yet, so first HeadSlot always runs all steps.
+		lastProcessedSlot: ^uint64(0),
+		env:               steps.NewEnv(),
 	}
 }
 
@@ -81,20 +85,27 @@ func (r *Runner) Start(ctx context.Context) {
 
 func (r *Runner) stepChain() []steps.Step {
 	return []steps.Step{
-		steprt.GetValidatorDetails{
+		steprt.RealtimeEnvBootstrap{
 			GetHead:    r.getHead,
 			Validators: r.validators,
 			Log:        r.log,
-			LastEpoch:  &r.lastEpoch,
 		},
 		steprt.ValidatorsBalanceAtSlot{
-			Client: r.client, Repo: r.repo, Validators: r.validators, Log: r.log,
+			Client:            r.client,
+			Repo:              r.repo,
+			Validators:        r.validators,
+			Log:               r.log,
+			LastProcessedSlot: &r.lastProcessedSlot,
 		},
-		steprt.ValidatorDuties{
-			Client: r.client, Repo: r.repo, Validators: r.validators, Log: r.log,
+		&steprt.AttestationRewards{
+			Client:            r.client,
+			Repo:              r.repo,
+			Validators:        r.validators,
+			Log:               r.log,
+			LastProcessedSlot: &r.lastProcessedSlot,
 		},
-		steprt.AttestationRewardsAtBoundary{
-			Client: r.client, Repo: r.repo, Validators: r.validators, Log: r.log,
+		&steprt.RecordLastProcessedSlot{
+			LastProcessedSlot: &r.lastProcessedSlot,
 		},
 	}
 }

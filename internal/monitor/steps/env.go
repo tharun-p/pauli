@@ -7,8 +7,11 @@ type Env struct {
 	Ctx              context.Context
 	HeadSlot         uint64
 	ValidatorIndices []uint64
-	DutiesEpoch      *uint64
-	RewardsEpoch     *uint64
+	// RewardsEpoch is set by AttestationRewards in Run when it enqueues work (cloned into steps.Job for RunAsync).
+	RewardsEpoch *uint64
+	// DeferLastProcessedCommit, when true, tells RecordLastProcessedSlot not to advance
+	// lastProcessedSlot this iteration (e.g. rewards epoch not finalized yet — retry same head next poll).
+	DeferLastProcessedCommit bool
 }
 
 // NewEnv allocates an Env (e.g. for a Runner field).
@@ -21,8 +24,8 @@ func (e *Env) Reset(ctx context.Context) {
 	e.Ctx = ctx
 	e.HeadSlot = 0
 	e.ValidatorIndices = e.ValidatorIndices[:0]
-	e.DutiesEpoch = nil
 	e.RewardsEpoch = nil
+	e.DeferLastProcessedCommit = false
 }
 
 // Clone returns a copy of iteration fields safe to use on a worker after the runner resets Env.
@@ -30,20 +33,16 @@ func (e *Env) Clone() Env {
 	if e == nil {
 		return Env{}
 	}
-	var de, re *uint64
-	if e.DutiesEpoch != nil {
-		v := *e.DutiesEpoch
-		de = &v
-	}
+	var re *uint64
 	if e.RewardsEpoch != nil {
 		v := *e.RewardsEpoch
 		re = &v
 	}
 	return Env{
-		Ctx:              e.Ctx,
-		HeadSlot:         e.HeadSlot,
-		ValidatorIndices: append([]uint64(nil), e.ValidatorIndices...),
-		DutiesEpoch:      de,
-		RewardsEpoch:     re,
+		Ctx:                      e.Ctx,
+		HeadSlot:                 e.HeadSlot,
+		ValidatorIndices:         append([]uint64(nil), e.ValidatorIndices...),
+		RewardsEpoch:             re,
+		DeferLastProcessedCommit: e.DeferLastProcessedCommit,
 	}
 }

@@ -125,6 +125,17 @@ func (c *Client) GetFinalityCheckpoints(ctx context.Context, stateID string) (*F
 	return &resp.Data, nil
 }
 
+// FinalizedEpoch returns the finalized checkpoint epoch from head state (fork choice).
+// Attestation rewards for epoch N are generally not served until the finalized epoch
+// has moved past N.
+func (c *Client) FinalizedEpoch(ctx context.Context) (uint64, error) {
+	cp, err := c.GetFinalityCheckpoints(ctx, "head")
+	if err != nil {
+		return 0, err
+	}
+	return uint64(cp.Finalized.Epoch), nil
+}
+
 // GetBlockHeader fetches a block header.
 // blockID can be "head", "genesis", "finalized", a slot number, or a block root.
 func (c *Client) GetBlockHeader(ctx context.Context, blockID string) (*BlockHeaderResponse, error) {
