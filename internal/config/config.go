@@ -52,6 +52,22 @@ type PostgresConf struct {
 	TTLDays  int    `yaml:"ttl_days"`
 }
 
+// ApplyDefaults sets default values for optional Postgres fields.
+func (p *PostgresConf) ApplyDefaults() {
+	if p.Port == 0 {
+		p.Port = 5432
+	}
+	if p.SSLMode == "" {
+		p.SSLMode = "disable"
+	}
+	if p.MaxConns <= 0 {
+		p.MaxConns = 10
+	}
+	if p.TTLDays <= 0 {
+		p.TTLDays = 90
+	}
+}
+
 // Timeout returns the HTTP timeout as a time.Duration.
 func (h *HTTPConf) Timeout() time.Duration {
 	return time.Duration(h.TimeoutSeconds) * time.Second
@@ -93,6 +109,22 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+func validatePostgres(p *PostgresConf) error {
+	if p.Host == "" {
+		return fmt.Errorf("postgres host is required")
+	}
+	if p.Port == 0 {
+		return fmt.Errorf("postgres port is required")
+	}
+	if p.User == "" {
+		return fmt.Errorf("postgres user is required")
+	}
+	if p.Database == "" {
+		return fmt.Errorf("postgres database is required")
+	}
+	return nil
+}
+
 // validate checks the configuration for required fields.
 func (c *Config) validate() error {
 	if c.BeaconNodeURL == "" {
@@ -103,17 +135,8 @@ func (c *Config) validate() error {
 	}
 	switch c.DatabaseDriver {
 	case "", "postgres":
-		if c.Postgres.Host == "" {
-			return fmt.Errorf("postgres host is required")
-		}
-		if c.Postgres.Port == 0 {
-			return fmt.Errorf("postgres port is required")
-		}
-		if c.Postgres.User == "" {
-			return fmt.Errorf("postgres user is required")
-		}
-		if c.Postgres.Database == "" {
-			return fmt.Errorf("postgres database is required")
+		if err := validatePostgres(&c.Postgres); err != nil {
+			return err
 		}
 	case "scylladb":
 		return fmt.Errorf("database_driver \"scylladb\" is no longer supported; use postgres only")
@@ -149,16 +172,5 @@ func (c *Config) setDefaults() {
 	if c.DatabaseDriver == "" {
 		c.DatabaseDriver = "postgres"
 	}
-	if c.Postgres.Port == 0 {
-		c.Postgres.Port = 5432
-	}
-	if c.Postgres.SSLMode == "" {
-		c.Postgres.SSLMode = "disable"
-	}
-	if c.Postgres.MaxConns <= 0 {
-		c.Postgres.MaxConns = 10
-	}
-	if c.Postgres.TTLDays <= 0 {
-		c.Postgres.TTLDays = 90
-	}
+	c.Postgres.ApplyDefaults()
 }
