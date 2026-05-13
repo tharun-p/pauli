@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rewards &amp; Payouts | Ethereal Vault</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#262627",
+              "secondary-fixed-dim": "#e1b2ff",
+              "on-secondary-container": "#fff5ff",
+              "on-background": "#ffffff",
+              "on-error-container": "#ffa8a3",
+              "surface-tint": "#8ff5ff",
+              "secondary": "#c97cff",
+              "primary-fixed": "#00eefc",
+              "surface-container": "#1a191b",
+              "on-secondary": "#350056",
+              "on-tertiary-container": "#005c3b",
+              "on-error": "#490006",
+              "tertiary-dim": "#00efa0",
+              "tertiary-fixed": "#00ffab",
+              "on-primary-fixed-variant": "#005e64",
+              "secondary-fixed": "#e9c4ff",
+              "primary-container": "#00eefc",
+              "on-secondary-fixed-variant": "#7c00c0",
+              "outline": "#767576",
+              "outline-variant": "#484849",
+              "on-primary": "#005d63",
+              "error-container": "#9f0519",
+              "on-primary-container": "#005359",
+              "error": "#ff716c",
+              "tertiary-fixed-dim": "#00efa0",
+              "surface-bright": "#2c2c2d",
+              "surface": "#0e0e0f",
+              "error-dim": "#d7383b",
+              "tertiary-container": "#00ffab",
+              "on-primary-fixed": "#003f43",
+              "primary-dim": "#00deec",
+              "inverse-surface": "#fcf8f9",
+              "surface-container-low": "#131314",
+              "background": "#0e0e0f",
+              "on-tertiary-fixed": "#00472d",
+              "primary": "#8ff5ff",
+              "inverse-on-surface": "#565556",
+              "surface-container-lowest": "#000000",
+              "on-surface-variant": "#adaaab",
+              "secondary-container": "#9000de",
+              "on-tertiary-fixed-variant": "#006742",
+              "on-surface": "#ffffff",
+              "on-tertiary": "#006642",
+              "surface-dim": "#0e0e0f",
+              "surface-container-high": "#201f21",
+              "surface-variant": "#262627",
+              "primary-fixed-dim": "#00deec",
+              "tertiary": "#afffd1",
+              "on-secondary-fixed": "#530082",
+              "inverse-primary": "#006a71",
+              "secondary-dim": "#aa30fa"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(26, 25, 27, 0.6);
+        backdrop-filter: blur(24px);
+      }
+      .liquid-gradient {
+        background: linear-gradient(135deg, #8ff5ff 0%, #00eefc 100%);
+      }
+      .glow-active {
+        box-shadow: 0 0 20px rgba(143, 245, 255, 0.08);
+      }
+      body {
+        background-color: #0e0e0f;
+        color: #ffffff;
+      }
+    </style>
+</head>
+<body class="font-body selection:bg-primary/30">
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-screen flex flex-col bg-zinc-950/80 backdrop-blur-xl h-full w-64 border-r border-zinc-800/30 z-[60]">
+<div class="px-6 py-8">
+<h1 class="text-2xl font-bold tracking-tighter text-cyan-400 font-headline">The Vault</h1>
+<p class="text-xs font-label text-zinc-500 mt-1 uppercase tracking-widest">Ethereum Mainnet</p>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+<span class="font-body font-medium">Validators</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="timeline">timeline</span>
+<span class="font-body font-medium">Epochs</span>
+</a>
+<!-- Active State Logic: Rewards Screen -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-cyan-400 border-r-2 border-cyan-400 bg-cyan-950/20 glow-active" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-body font-semibold">Rewards</span>
+</a>
+</nav>
+<div class="p-6 border-t border-zinc-800/30">
+<button class="w-full liquid-gradient text-on-primary-container font-headline font-bold py-3 rounded-xl shadow-lg hover:scale-[0.98] transition-all">
+                Stake ETH
+            </button>
+</div>
+<div class="px-3 pb-8 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body text-sm">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="font-body text-sm">Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="flex justify-between items-center w-full px-8 py-4 sticky top-0 z-50 ml-64 bg-zinc-950/50 backdrop-blur-md">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-cyan-400 font-headline uppercase tracking-tighter">Ethereal Vault</span>
+<div class="hidden lg:flex items-center gap-6">
+<span class="text-zinc-400 font-label text-xs uppercase tracking-widest flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_rgba(175,255,209,0.5)]"></span>
+                    Network
+                </span>
+<span class="text-zinc-400 font-label text-xs uppercase tracking-widest">Gas: 12 gwei</span>
+<span class="text-zinc-400 font-label text-xs uppercase tracking-widest">Block: 18.4M</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-zinc-400">
+<span class="material-symbols-outlined cursor-pointer hover:text-cyan-300 transition-colors" data-icon="notifications_active">notifications_active</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-cyan-300 transition-colors" data-icon="sensors">sensors</span>
+</div>
+<button class="px-6 py-2 rounded-lg border border-outline-variant/30 text-primary font-headline font-bold text-sm hover:bg-primary/5 transition-all">
+                Connect Wallet
+            </button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 p-8 min-h-screen">
+<!-- Hero Section: Cumulative Gains -->
+<section class="mb-12">
+<div class="grid grid-cols-12 gap-8">
+<div class="col-span-12 lg:col-span-8">
+<h2 class="font-label text-on-surface-variant text-sm uppercase tracking-widest mb-2">Total Realized Gains</h2>
+<div class="flex items-baseline gap-4">
+<span class="font-headline text-7xl font-bold text-on-surface tracking-tighter">142.84 ETH</span>
+<span class="font-headline text-2xl text-tertiary-dim font-medium">+12.4% <span class="text-sm font-label text-on-surface-variant ml-1">30D</span></span>
+</div>
+<div class="mt-8 grid grid-cols-3 gap-6">
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/5">
+<p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Execution Layer</p>
+<p class="text-2xl font-headline font-bold text-primary">42.10 ETH</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/5">
+<p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Consensus Layer</p>
+<p class="text-2xl font-headline font-bold text-secondary-fixed-dim">100.74 ETH</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/5">
+<p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Active APY</p>
+<p class="text-2xl font-headline font-bold text-tertiary-fixed">4.2%</p>
+</div>
+</div>
+</div>
+<div class="col-span-12 lg:col-span-4 glass-card p-8 rounded-3xl border border-primary/10 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-20 group-hover:opacity-40 transition-opacity">
+<span class="material-symbols-outlined text-6xl text-primary" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<h3 class="font-headline text-xl font-bold mb-4">Payout Milestone</h3>
+<p class="text-on-surface-variant font-body text-sm leading-relaxed mb-6">
+                        You have successfully reached the top 5% of stakers for Epoch 241,000. Your rewards have been auto-compounded.
+                    </p>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-label text-on-surface-variant uppercase">
+<span>Next Payout Progress</span>
+<span>84%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full liquid-gradient w-[84%]"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Rewards Log Table -->
+<section>
+<div class="flex justify-between items-end mb-8">
+<div>
+<h3 class="font-headline text-3xl font-bold text-on-surface">Reward History</h3>
+<p class="text-on-surface-variant font-body text-sm mt-1">Real-time settlement of block proposals and attestation rewards.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-surface-container-high rounded-lg text-xs font-label font-bold text-on-surface-variant hover:text-on-surface transition-colors">Export CSV</button>
+<button class="px-4 py-2 bg-surface-container-high rounded-lg text-xs font-label font-bold text-on-surface-variant hover:text-on-surface transition-colors">Filters</button>
+</div>
+</div>
+<div class="space-y-4">
+<!-- Epoch Header -->
+<div class="grid grid-cols-12 px-6 text-xs font-label text-on-surface-variant uppercase tracking-[0.2em] opacity-60">
+<div class="col-span-4">Source &amp; Event</div>
+<div class="col-span-2 text-right">Epoch</div>
+<div class="col-span-3 text-right">Reward Amount</div>
+<div class="col-span-3 text-right">Settlement Date</div>
+</div>
+<!-- High Reward Event -->
+<div class="grid grid-cols-12 items-center px-6 py-6 rounded-2xl bg-surface-container-high/40 hover:bg-surface-container-high transition-all border-l-4 border-primary shadow-[0_0_15px_rgba(143,245,255,0.05)]">
+<div class="col-span-4 flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="view_in_ar" style="font-variation-settings: 'FILL' 1;">view_in_ar</span>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface">Block Proposal</p>
+<p class="text-xs font-label text-primary uppercase tracking-wider">High Reward Epoch</p>
+</div>
+</div>
+<div class="col-span-2 text-right font-label text-on-surface-variant">241,892</div>
+<div class="col-span-3 text-right">
+<p class="font-headline text-2xl font-bold text-on-surface">0.1248 ETH</p>
+<p class="text-xs font-label text-tertiary-dim">+$284.12 USD</p>
+</div>
+<div class="col-span-3 text-right flex flex-col items-end">
+<p class="text-sm font-body text-on-surface">Oct 24, 2023</p>
+<div class="flex items-center gap-1 text-tertiary text-[10px] font-label uppercase font-bold bg-tertiary/10 px-2 py-0.5 rounded mt-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                             Confirmed
+                        </div>
+</div>
+</div>
+<!-- Standard Attestation -->
+<div class="grid grid-cols-12 items-center px-6 py-6 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-all border-l-4 border-transparent">
+<div class="col-span-4 flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
+<span class="material-symbols-outlined" data-icon="verified">verified</span>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface">Attestation Reward</p>
+<p class="text-xs font-label text-on-surface-variant uppercase tracking-wider">Validator #882,102</p>
+</div>
+</div>
+<div class="col-span-2 text-right font-label text-on-surface-variant">241,891</div>
+<div class="col-span-3 text-right">
+<p class="font-headline text-xl font-bold text-on-surface">0.0042 ETH</p>
+<p class="text-xs font-label text-on-surface-variant">+$9.52 USD</p>
+</div>
+<div class="col-span-3 text-right flex flex-col items-end">
+<p class="text-sm font-body text-on-surface">Oct 24, 2023</p>
+<div class="flex items-center gap-1 text-zinc-500 text-[10px] font-label uppercase font-bold bg-zinc-800 px-2 py-0.5 rounded mt-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle">check_circle</span>
+                             Confirmed
+                        </div>
+</div>
+</div>
+<!-- Another High Reward Event -->
+<div class="grid grid-cols-12 items-center px-6 py-6 rounded-2xl bg-surface-container-high/40 hover:bg-surface-container-high transition-all border-l-4 border-secondary shadow-[0_0_15px_rgba(201,124,255,0.05)]">
+<div class="col-span-4 flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="diamond" style="font-variation-settings: 'FILL' 1;">diamond</span>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface">Sync Committee</p>
+<p class="text-xs font-label text-secondary-fixed-dim uppercase tracking-wider">Bonus Period Reward</p>
+</div>
+</div>
+<div class="col-span-2 text-right font-label text-on-surface-variant">241,885</div>
+<div class="col-span-3 text-right">
+<p class="font-headline text-2xl font-bold text-on-surface">0.4120 ETH</p>
+<p class="text-xs font-label text-tertiary-dim">+$942.80 USD</p>
+</div>
+<div class="col-span-3 text-right flex flex-col items-end">
+<p class="text-sm font-body text-on-surface">Oct 23, 2023</p>
+<div class="flex items-center gap-1 text-tertiary text-[10px] font-label uppercase font-bold bg-tertiary/10 px-2 py-0.5 rounded mt-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                             Confirmed
+                        </div>
+</div>
+</div>
+<!-- Standard Attestation -->
+<div class="grid grid-cols-12 items-center px-6 py-6 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-all border-l-4 border-transparent">
+<div class="col-span-4 flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
+<span class="material-symbols-outlined" data-icon="verified">verified</span>
+</div>
+<div>
+<p class="font-headline font-bold text-on-surface">Attestation Reward</p>
+<p class="text-xs font-label text-on-surface-variant uppercase tracking-wider">Validator #882,102</p>
+</div>
+</div>
+<div class="col-span-2 text-right font-label text-on-surface-variant">241,884</div>
+<div class="col-span-3 text-right">
+<p class="font-headline text-xl font-bold text-on-surface">0.0041 ETH</p>
+<p class="text-xs font-label text-on-surface-variant">+$9.28 USD</p>
+</div>
+<div class="col-span-3 text-right flex flex-col items-end">
+<p class="text-sm font-body text-on-surface">Oct 23, 2023</p>
+<div class="flex items-center gap-1 text-zinc-500 text-[10px] font-label uppercase font-bold bg-zinc-800 px-2 py-0.5 rounded mt-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle">check_circle</span>
+                             Confirmed
+                        </div>
+</div>
+</div>
+</div>
+<!-- Load More Interaction -->
+<div class="mt-12 flex flex-col items-center">
+<button class="flex items-center gap-2 text-on-surface-variant font-label text-sm uppercase tracking-widest hover:text-primary transition-all group">
+                    View More History
+                    <span class="material-symbols-outlined group-hover:translate-y-1 transition-transform" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+</section>
+<!-- Asymmetric Visual Footer -->
+<section class="mt-24 grid grid-cols-1 md:grid-cols-2 gap-8 pb-12">
+<div class="relative h-64 rounded-3xl overflow-hidden group">
+<img alt="abstract digital light" class="w-full h-full object-cover grayscale brightness-50 group-hover:scale-105 transition-transform duration-700" data-alt="abstract glowing digital representation of ether network with blue and purple light beams intersecting on a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAiHtKBYQbMlJJ2S6J5PTY8-MN14yQZk9O64yTyHpNYSAGy6IlUxkYZKNhl8bWAWs26-rgt44diZ_j3MWy9yHpPzD3swjmHs8O4VcHwOYycsdi6_edaR7QEKHHB8z4tGFCPKSkL0DInlHBPfbuGDJah_xwXV0YHTIyD2eSWsRzNLlA1cxAoY8Gg90GQ-kJFwJs2U78E_XWBgbdNPhx8JnIuOz7mwmFlcxCc5M6BupLgsKl7H5S4KAxZeKjQmAPz6n3QjCCDTLIyDr1t"/>
+<div class="absolute inset-0 p-8 flex flex-col justify-end bg-gradient-to-t from-background via-transparent to-transparent">
+<p class="text-primary font-headline font-bold text-lg mb-1">Weekly Yield Outlook</p>
+<p class="text-on-surface-variant font-body text-sm max-w-xs">Projected network congestion suggests a 15% increase in potential execution layer tips.</p>
+</div>
+</div>
+<div class="bg-surface-container-high/20 rounded-3xl p-8 flex flex-col justify-between border border-outline-variant/10">
+<div>
+<h4 class="font-headline text-2xl font-bold mb-2">Rewards Auto-Reinvested</h4>
+<p class="text-on-surface-variant font-body text-sm mb-6">Your consensus rewards are automatically added to your staking balance to compound gains. Execution layer tips are held in your liquid vault.</p>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex -space-x-3">
+<div class="w-10 h-10 rounded-full bg-primary-container border-2 border-background flex items-center justify-center text-on-primary-container font-bold text-xs">ETH</div>
+<div class="w-10 h-10 rounded-full bg-secondary-container border-2 border-background flex items-center justify-center text-on-secondary-container font-bold text-xs">VAU</div>
+<div class="w-10 h-10 rounded-full bg-tertiary-container border-2 border-background flex items-center justify-center text-on-tertiary-container font-bold text-xs">GOV</div>
+</div>
+<button class="text-primary text-sm font-headline font-bold flex items-center gap-1 group">
+                        Manage Reinvestment
+                        <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+</body></html>

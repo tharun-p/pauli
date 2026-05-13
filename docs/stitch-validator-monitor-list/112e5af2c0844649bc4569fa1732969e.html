@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ethereal Vault | Validator Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#262627",
+              "secondary-fixed-dim": "#e1b2ff",
+              "on-secondary-container": "#fff5ff",
+              "on-background": "#ffffff",
+              "on-error-container": "#ffa8a3",
+              "surface-tint": "#8ff5ff",
+              "secondary": "#c97cff",
+              "primary-fixed": "#00eefc",
+              "surface-container": "#1a191b",
+              "on-secondary": "#350056",
+              "on-tertiary-container": "#005c3b",
+              "on-error": "#490006",
+              "tertiary-dim": "#00efa0",
+              "tertiary-fixed": "#00ffab",
+              "on-primary-fixed-variant": "#005e64",
+              "secondary-fixed": "#e9c4ff",
+              "primary-container": "#00eefc",
+              "on-secondary-fixed-variant": "#7c00c0",
+              "outline": "#767576",
+              "outline-variant": "#484849",
+              "on-primary": "#005d63",
+              "error-container": "#9f0519",
+              "on-primary-container": "#005359",
+              "error": "#ff716c",
+              "tertiary-fixed-dim": "#00efa0",
+              "surface-bright": "#2c2c2d",
+              "surface": "#0e0e0f",
+              "error-dim": "#d7383b",
+              "tertiary-container": "#00ffab",
+              "on-primary-fixed": "#003f43",
+              "primary-dim": "#00deec",
+              "inverse-surface": "#fcf8f9",
+              "surface-container-low": "#131314",
+              "background": "#0e0e0f",
+              "on-tertiary-fixed": "#00472d",
+              "primary": "#8ff5ff",
+              "inverse-on-surface": "#565556",
+              "surface-container-lowest": "#000000",
+              "on-surface-variant": "#adaaab",
+              "secondary-container": "#9000de",
+              "on-tertiary-fixed-variant": "#006742",
+              "on-surface": "#ffffff",
+              "on-tertiary": "#006642",
+              "surface-dim": "#0e0e0f",
+              "surface-container-high": "#201f21",
+              "surface-variant": "#262627",
+              "primary-fixed-dim": "#00deec",
+              "tertiary": "#afffd1",
+              "on-secondary-fixed": "#530082",
+              "inverse-primary": "#006a71",
+              "secondary-dim": "#aa30fa"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(26, 25, 27, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+        .liquid-gradient {
+            background: linear-gradient(135deg, #8ff5ff 0%, #00eefc 100%);
+        }
+        .primary-glow:hover {
+            box-shadow: 0 0 20px rgba(143, 245, 255, 0.08);
+        }
+        .sparkline-gradient {
+            background: linear-gradient(to top, transparent, rgba(143, 245, 255, 0.1));
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-screen flex flex-col bg-zinc-950/80 backdrop-blur-xl h-full w-64 border-r border-zinc-800/30 z-[60]">
+<div class="p-8">
+<div class="text-2xl font-bold tracking-tighter text-cyan-400 font-headline">The Vault</div>
+<p class="text-[10px] font-label uppercase tracking-widest text-zinc-500 mt-1">Ethereum Mainnet</p>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<!-- Dashboard Active -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-cyan-400 border-r-2 border-cyan-400 bg-cyan-950/20 group" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 group" href="#">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+<span class="font-medium">Validators</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 group" href="#">
+<span class="material-symbols-outlined" data-icon="timeline">timeline</span>
+<span class="font-medium">Epochs</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 group" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-medium">Rewards</span>
+</a>
+</nav>
+<div class="p-4 mt-auto space-y-1">
+<button class="w-full mb-6 liquid-gradient text-on-primary-container font-bold py-3 rounded-xl hover:opacity-90 transition-all scale-98 active:scale-95 shadow-lg shadow-primary/10">
+                Stake ETH
+            </button>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:text-zinc-300 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-sm font-label">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:text-zinc-300 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="text-sm font-label">Support</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="flex justify-between items-center w-full px-8 py-4 sticky top-0 z-50 ml-64 bg-zinc-950/50 backdrop-blur-md w-[calc(100%-16rem)]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-cyan-400 font-headline tracking-tight uppercase">Ethereal Vault</span>
+<div class="hidden md:flex gap-6 text-xs font-label uppercase tracking-widest">
+<span class="text-cyan-400 font-bold">Network</span>
+<span class="text-zinc-400">Gas: 12 gwei</span>
+<span class="text-zinc-400">Block: 18.4M</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-zinc-400 hover:text-cyan-300 cursor-pointer transition-colors" data-icon="notifications_active">notifications_active</span>
+<span class="material-symbols-outlined text-zinc-400 hover:text-cyan-300 cursor-pointer transition-colors" data-icon="sensors">sensors</span>
+</div>
+<button class="border border-outline-variant/30 px-5 py-2 rounded-full text-sm font-bold text-cyan-400 hover:bg-cyan-400/10 transition-all">
+                Connect Wallet
+            </button>
+<img alt="Validator Admin" class="w-8 h-8 rounded-full border border-zinc-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTWQSNvYNj_3Kv6y8dPNiLwySeBdIsiFxiGLSYypjoOcxzTMEQ3Ys9Btu8SdLEQyHlwIXgLTZB34VSAQ314MsiHVMLN_UYHEnUx_NNvRXGf8nI7u3aVEsjlx2XZR2J2rknx-fjiAnpWdIxTH1feIW_OYn5Zjdzz_UnacGf29zl7YplBUdNnW8Vu0-sERTA69XCbmfQdTlsWcK1uUlST2hGsMDCweYRgU2WMDR6W6KaDHZeSZJeSEWyYm-xfxGbkxVmvxqrpjWqIHxq"/>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 p-8 min-h-screen">
+<!-- Hero Header -->
+<section class="mb-10 flex flex-col md:flex-row justify-between items-end gap-6">
+<div>
+<h1 class="font-headline text-5xl font-bold tracking-tight mb-2">Vault Overview</h1>
+<p class="text-on-surface-variant font-body">Real-time monitoring for your institutional staking nodes.</p>
+</div>
+<div class="flex gap-4">
+<div class="glass-panel px-6 py-4 rounded-2xl border border-outline-variant/10 text-right">
+<p class="text-[10px] font-label text-zinc-500 uppercase tracking-widest mb-1">Global APY</p>
+<p class="text-2xl font-headline font-bold text-tertiary">3.82%</p>
+</div>
+<div class="glass-panel px-6 py-4 rounded-2xl border border-outline-variant/10 text-right">
+<p class="text-[10px] font-label text-zinc-500 uppercase tracking-widest mb-1">Vault Health</p>
+<p class="text-2xl font-headline font-bold text-primary">OPTIMAL</p>
+</div>
+</div>
+</section>
+<!-- Bento Grid Metrics -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+<!-- Active Validators -->
+<div class="surface-container-low p-6 rounded-2xl border border-outline-variant/5 primary-glow transition-all">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-lg" data-icon="verified_user" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="text-[10px] font-label text-tertiary px-2 py-1 bg-tertiary/10 rounded-full">All Active</span>
+</div>
+<p class="text-on-surface-variant text-sm font-label uppercase tracking-widest mb-1">Active Validators</p>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">4/4</span>
+</div>
+</div>
+<!-- Total Rewards -->
+<div class="surface-container-low p-6 rounded-2xl border border-outline-variant/5 primary-glow transition-all">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-secondary bg-secondary/10 p-2 rounded-lg" data-icon="account_balance_wallet" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<span class="text-xs font-label text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="trending_up">trending_up</span>
+                        2.1%
+                    </span>
+</div>
+<p class="text-on-surface-variant text-sm font-label uppercase tracking-widest mb-1">Total Rewards</p>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">12.45</span>
+<span class="text-lg font-headline text-zinc-500">ETH</span>
+</div>
+</div>
+<!-- Current Balance -->
+<div class="surface-container-low p-6 rounded-2xl border border-outline-variant/5 primary-glow transition-all">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-tertiary bg-tertiary/10 p-2 rounded-lg" data-icon="savings" style="font-variation-settings: 'FILL' 1;">savings</span>
+</div>
+<p class="text-on-surface-variant text-sm font-label uppercase tracking-widest mb-1">Locked Value</p>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">140.8</span>
+<span class="text-lg font-headline text-zinc-500">ETH</span>
+</div>
+</div>
+<!-- Staking Streak -->
+<div class="surface-container-low p-6 rounded-2xl border border-outline-variant/5 primary-glow transition-all relative overflow-hidden">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary/10 p-2 rounded-lg" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<p class="text-on-surface-variant text-sm font-label uppercase tracking-widest mb-1">Staking Streak</p>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">482</span>
+<span class="text-lg font-headline text-zinc-500">DAYS</span>
+</div>
+<div class="absolute -right-4 -bottom-4 opacity-5">
+<span class="material-symbols-outlined text-9xl text-primary" data-icon="timer">timer</span>
+</div>
+</div>
+</div>
+<!-- Performance Graph & Activity -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Large Performance Card -->
+<div class="lg:col-span-2 glass-panel rounded-3xl p-8 border border-outline-variant/10 relative">
+<div class="flex justify-between items-center mb-10">
+<div>
+<h3 class="font-headline text-2xl font-bold">Performance Pulse</h3>
+<p class="text-on-surface-variant font-label text-sm tracking-wide">Network effectiveness over last 24h</p>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-1.5 rounded-lg bg-surface-variant text-xs font-bold text-on-surface uppercase tracking-wider">24H</button>
+<button class="px-4 py-1.5 rounded-lg hover:bg-surface-variant/50 text-xs font-bold text-zinc-500 uppercase tracking-wider transition-all">7D</button>
+</div>
+</div>
+<!-- Custom High-Fidelity Sparkline Visualization -->
+<div class="h-64 w-full relative group">
+<div class="absolute inset-0 flex items-end justify-between px-2">
+<!-- Simulated bars/line data points -->
+<div class="w-2 bg-primary/20 rounded-t-sm h-[40%]"></div>
+<div class="w-2 bg-primary/30 rounded-t-sm h-[55%]"></div>
+<div class="w-2 bg-primary/20 rounded-t-sm h-[45%]"></div>
+<div class="w-2 bg-primary/40 rounded-t-sm h-[60%]"></div>
+<div class="w-2 bg-primary/25 rounded-t-sm h-[50%]"></div>
+<div class="w-2 bg-primary/50 rounded-t-sm h-[75%]"></div>
+<div class="w-2 bg-primary/30 rounded-t-sm h-[65%]"></div>
+<div class="w-2 bg-primary/60 rounded-t-sm h-[80%]"></div>
+<div class="w-2 bg-primary/40 rounded-t-sm h-[70%]"></div>
+<div class="w-2 bg-primary/80 rounded-t-sm h-[95%] shadow-[0_0_15px_rgba(143,245,255,0.4)]"></div>
+<div class="w-2 bg-primary/50 rounded-t-sm h-[85%]"></div>
+<div class="w-2 bg-primary/40 rounded-t-sm h-[70%]"></div>
+<div class="w-2 bg-primary/20 rounded-t-sm h-[45%]"></div>
+<div class="w-2 bg-primary/30 rounded-t-sm h-[55%]"></div>
+<div class="w-2 bg-primary/60 rounded-t-sm h-[88%]"></div>
+<div class="w-2 bg-primary/40 rounded-t-sm h-[65%]"></div>
+<div class="w-2 bg-primary/30 rounded-t-sm h-[55%]"></div>
+<div class="w-2 bg-primary/50 rounded-t-sm h-[75%]"></div>
+<div class="w-2 bg-primary/20 rounded-t-sm h-[40%]"></div>
+<div class="w-2 bg-primary/40 rounded-t-sm h-[60%]"></div>
+</div>
+<!-- The Stroke Line Overlay (SVG) -->
+<svg class="absolute inset-0 w-full h-full drop-shadow-[0_0_8px_rgba(143,245,255,0.5)]" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0 60 L5 45 L10 55 L15 40 L20 50 L25 25 L30 35 L35 20 L40 30 L45 5 L50 15 L55 30 L60 55 L65 45 L70 12 L75 35 L80 45 L85 25 L90 60 L95 40 L100 50" fill="none" stroke="#8ff5ff" stroke-width="0.5"></path>
+</svg>
+</div>
+<div class="mt-6 flex justify-between text-[10px] font-label text-zinc-600 uppercase tracking-[0.2em]">
+<span>12:00 AM</span>
+<span>06:00 AM</span>
+<span>12:00 PM</span>
+<span>06:00 PM</span>
+<span>NOW</span>
+</div>
+</div>
+<!-- Recent Activity Panel -->
+<div class="surface-container-low rounded-3xl p-8 border border-outline-variant/10">
+<h3 class="font-headline text-xl font-bold mb-6">Live Feed</h3>
+<div class="space-y-6">
+<div class="flex gap-4 group cursor-pointer">
+<div class="mt-1">
+<div class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_#afffd1]"></div>
+</div>
+<div>
+<p class="text-sm font-medium">Attestation Inclusion</p>
+<p class="text-[11px] font-label text-on-surface-variant">Slot 789210 • 2m ago</p>
+</div>
+<div class="ml-auto text-tertiary text-xs font-bold">+0.00034 ETH</div>
+</div>
+<div class="flex gap-4 group cursor-pointer">
+<div class="mt-1">
+<div class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_#afffd1]"></div>
+</div>
+<div>
+<p class="text-sm font-medium">Attestation Inclusion</p>
+<p class="text-[11px] font-label text-on-surface-variant">Slot 789209 • 14m ago</p>
+</div>
+<div class="ml-auto text-tertiary text-xs font-bold">+0.00034 ETH</div>
+</div>
+<div class="flex gap-4 group cursor-pointer">
+<div class="mt-1">
+<div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#c97cff]"></div>
+</div>
+<div>
+<p class="text-sm font-medium">Epoch Transition</p>
+<p class="text-[11px] font-label text-on-surface-variant">Epoch 24651 • 42m ago</p>
+</div>
+<div class="ml-auto text-secondary text-xs font-bold">Processed</div>
+</div>
+<div class="flex gap-4 group cursor-pointer opacity-60 hover:opacity-100 transition-opacity">
+<div class="mt-1">
+<div class="w-2 h-2 rounded-full bg-tertiary"></div>
+</div>
+<div>
+<p class="text-sm font-medium">Reward Distribution</p>
+<p class="text-[11px] font-label text-on-surface-variant">Manual Claim • 1h ago</p>
+</div>
+<div class="ml-auto text-tertiary text-xs font-bold">+1.24 ETH</div>
+</div>
+</div>
+<button class="w-full mt-10 py-3 rounded-xl border border-outline-variant/20 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-cyan-400 hover:bg-cyan-400/5 transition-all">
+                    View All Logs
+                </button>
+</div>
+</div>
+<!-- Validator Detailed Grid -->
+<section class="mt-12">
+<div class="flex justify-between items-end mb-8">
+<h2 class="font-headline text-3xl font-bold">Node Integrity</h2>
+<div class="text-on-surface-variant font-label text-sm">4 Validators Monitoring</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+<!-- Validator Item -->
+<div class="surface-container p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all group">
+<div class="flex justify-between mb-4">
+<span class="text-[10px] font-label text-zinc-500 uppercase tracking-tighter">#882,901</span>
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="fiber_manual_record" style="font-variation-settings: 'FILL' 1;">fiber_manual_record</span>
+</div>
+<div class="mb-4">
+<img alt="Validator visualization" class="w-12 h-12 rounded-lg mb-4 opacity-80 group-hover:opacity-100 transition-all" data-alt="abstract procedural digital art of a glowing cybernetic node with neon lines and circuits on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCukMEXaqL7a07Xuw-KT3JFNpR5M197BKWyufXeYV21op1i-8US1sPfMmW3pjAHF5AZymBULNGw-QjtsUP3rmUf9cu1yGFc_hvrGdJLEnHCxn_OrTHebS2dk8g6q5bZiGATqyvb4sAfdIXj8Xfz8cvx8WFlz4gZ9X9WL2A3YJVTJDzb60sPQDCEdg1BDtFm9kzMXLvUI0Sx3UklX0gzOKl--ZN0XAfFfKsdl0rlNsaHClm9yw_ycO3e2HTfVGSC_o_qHzAzLCA6ifyT"/>
+<h4 class="font-headline font-bold text-lg">Alpha-Node-01</h4>
+<p class="text-xs font-label text-zinc-500 truncate mt-1">0x8a23...f2e9</p>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-4 border-t border-outline-variant/10">
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Balance</p>
+<p class="font-headline font-bold text-sm">32.12 ETH</p>
+</div>
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Uptime</p>
+<p class="font-headline font-bold text-sm text-tertiary">99.9%</p>
+</div>
+</div>
+</div>
+<div class="surface-container p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all group">
+<div class="flex justify-between mb-4">
+<span class="text-[10px] font-label text-zinc-500 uppercase tracking-tighter">#882,902</span>
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="fiber_manual_record" style="font-variation-settings: 'FILL' 1;">fiber_manual_record</span>
+</div>
+<div class="mb-4">
+<img alt="Validator visualization" class="w-12 h-12 rounded-lg mb-4 opacity-80 group-hover:opacity-100 transition-all" data-alt="abstract procedural digital art of a pulsing violet data node with crystalline structures on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQr89A_tvFGdyu_Sxn17DzXcHNp9hdWH6BAELK9fwT3m8Ndmo5FBkWa__hCEoLfB1RXx_C9YaTZmAL6S-X0MKZBvsOx6xQxjGnpFbKRDkELpbW4ULawNjIcVBYbHhO8cnHsyoMBbY6PMrwwSQ-BMkSDkmyEflbzIaWvfgmC0nupcnAfZi9Kz3yIgtyIvyBdYbo9kC2lCl8N3VgoBssBRYDfcxbeV7Y49uvonVCVQM8vC4Y72qsfjnb4fgeQdyERptYZJofffc2JXOG"/>
+<h4 class="font-headline font-bold text-lg">Alpha-Node-02</h4>
+<p class="text-xs font-label text-zinc-500 truncate mt-1">0x3b1c...91d2</p>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-4 border-t border-outline-variant/10">
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Balance</p>
+<p class="font-headline font-bold text-sm">32.08 ETH</p>
+</div>
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Uptime</p>
+<p class="font-headline font-bold text-sm text-tertiary">100%</p>
+</div>
+</div>
+</div>
+<div class="surface-container p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all group">
+<div class="flex justify-between mb-4">
+<span class="text-[10px] font-label text-zinc-500 uppercase tracking-tighter">#882,905</span>
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="fiber_manual_record" style="font-variation-settings: 'FILL' 1;">fiber_manual_record</span>
+</div>
+<div class="mb-4">
+<img alt="Validator visualization" class="w-12 h-12 rounded-lg mb-4 opacity-80 group-hover:opacity-100 transition-all" data-alt="abstract procedural digital art of an emerald green energy sphere representing a validator node on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4ASsMKDJ8eeMhg2tRfdLxr-XfZ4-dBJGAI1A5FC8FQouL9EJ_S52iSvyJlAxeCFRrR52IBR0UOEDU2xOFjybvwzDZZu6gnlq1xDU3Jy1WpsaDK5WJfK3PhCfzc8Lbde4ThtOeHZhxBf636kalutHcN6Kj8_rV6i1hOlQwQe6NAwx_5g1K9QMBQpcRrrHpY7N3On8qu7_kN20ZVYSzLcfvQBki_3r2jBq_-aW7tTVhj76t2qAEXr4JVWEpMyZnKtzzc_lMZV78w1pS"/>
+<h4 class="font-headline font-bold text-lg">Beta-Vault-01</h4>
+<p class="text-xs font-label text-zinc-500 truncate mt-1">0x7f44...e331</p>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-4 border-t border-outline-variant/10">
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Balance</p>
+<p class="font-headline font-bold text-sm">33.45 ETH</p>
+</div>
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Uptime</p>
+<p class="font-headline font-bold text-sm text-tertiary">99.8%</p>
+</div>
+</div>
+</div>
+<div class="surface-container p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all group">
+<div class="flex justify-between mb-4">
+<span class="text-[10px] font-label text-zinc-500 uppercase tracking-tighter">#882,909</span>
+<span class="material-symbols-outlined text-tertiary text-lg" data-icon="fiber_manual_record" style="font-variation-settings: 'FILL' 1;">fiber_manual_record</span>
+</div>
+<div class="mb-4">
+<img alt="Validator visualization" class="w-12 h-12 rounded-lg mb-4 opacity-80 group-hover:opacity-100 transition-all" data-alt="abstract procedural digital art of a vibrant cyan matrix node with complex floating geometry on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7n2q0qCUEGY5pzM5Su2qJjYOZsOojc9QTpOpqvSwWOsJfr_u-JCtgJiCAFIilPzRUI4CIy6kBqpJ0NI6Zn--Qv4au7lXdE0mBPG2JVK5VCCM_GTyC2suqxXspSQ7X7rrz72b2kjohFIDlzXpNH2wMk4CCyqjKaJzzfPPuOp-9B-2a4imgQxiEF4ZeF7tepg5FKdwd1s8qBfkaY-dJs4jEEXif79i3ueGRhoMAHbvaBus64Arq8kyGgQW7gcMyLyDFAxeObxc7IM2O"/>
+<h4 class="font-headline font-bold text-lg">Beta-Vault-02</h4>
+<p class="text-xs font-label text-zinc-500 truncate mt-1">0x112d...cc90</p>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-4 border-t border-outline-variant/10">
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Balance</p>
+<p class="font-headline font-bold text-sm">43.15 ETH</p>
+</div>
+<div>
+<p class="text-[9px] font-label text-zinc-500 uppercase">Uptime</p>
+<p class="font-headline font-bold text-sm text-tertiary">100%</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Contextual FAB - Trigger Stake -->
+<button class="fixed bottom-8 right-8 w-14 h-14 rounded-full liquid-gradient flex items-center justify-center shadow-2xl shadow-primary/40 hover:scale-110 active:scale-95 transition-all z-[70] group">
+<span class="material-symbols-outlined text-on-primary-container text-3xl font-bold transition-transform group-hover:rotate-90" data-icon="add">add</span>
+</button>
+</body></html>

@@ -37,3 +37,11 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Node (Stitch download script + Next UI)
+scripts/node_modules/
+pauli-ui/node_modules/
+mcp.json
+
+# Cursor MCP (may contain API keys)
+.cursor/mcp.json
