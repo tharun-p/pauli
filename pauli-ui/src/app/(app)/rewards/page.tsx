@@ -26,6 +26,21 @@ import { RewardsChartsPanel } from "./rewards-charts";
 
 type Tab = "attestation" | "proposer" | "sync";
 
+type RewardTableColumn = {
+  title: string;
+  /** Shown under the title; reward units use accent when `subtitleAccent` is true */
+  subtitle?: string;
+  subtitleAccent?: boolean;
+  /** Width hint for `table-fixed` layout (narrow viewports) */
+  thClassName?: string;
+  /** Extra classes on body cells in this column */
+  tdClassName?: string;
+  /** When true, cell content is wrapped with `title` for hover (e.g. truncated pubkey) */
+  cellTitle?: boolean;
+  /** Header and cell horizontal alignment */
+  align?: "start" | "end" | "center";
+};
+
 type AppliedRewards = {
   fromEpoch: number;
   toEpoch: number;
@@ -393,10 +408,40 @@ export default function RewardsPage() {
                       formatInteger(r.source_reward),
                       formatInteger(r.target_reward),
                       formatInteger(r.total_reward),
-                      r.timestamp,
                     ],
                   }))}
-                  headers={["Validator", "Epoch", "Head", "Source", "Target", "Total", "Timestamp"]}
+                  columns={[
+                    { title: "Validator", thClassName: "w-[14%]" },
+                    { title: "Epoch", thClassName: "w-[12%]" },
+                    {
+                      title: "Head",
+                      subtitle: "gwei",
+                      subtitleAccent: true,
+                      thClassName: "w-[15%]",
+                      align: "end",
+                    },
+                    {
+                      title: "Source",
+                      subtitle: "gwei",
+                      subtitleAccent: true,
+                      thClassName: "w-[15%]",
+                      align: "end",
+                    },
+                    {
+                      title: "Target",
+                      subtitle: "gwei",
+                      subtitleAccent: true,
+                      thClassName: "w-[15%]",
+                      align: "end",
+                    },
+                    {
+                      title: "Total",
+                      subtitle: "gwei",
+                      subtitleAccent: true,
+                      thClassName: "w-[29%]",
+                      align: "end",
+                    },
+                  ]}
                 />
               )}
             </TabsContent>
@@ -412,11 +457,19 @@ export default function RewardsPage() {
                       formatInteger(r.validator_index),
                       formatInteger(r.slot_number),
                       formatGweiEth(r.rewards),
-                      r.validator_pubkey.slice(0, 10) + "…",
-                      r.timestamp,
                     ],
                   }))}
-                  headers={["Validator", "Slot", "Rewards", "Pubkey", "Timestamp"]}
+                  columns={[
+                    { title: "Validator", thClassName: "w-[26%]" },
+                    { title: "Slot", thClassName: "w-[24%]" },
+                    {
+                      title: "Reward",
+                      subtitle: "ETH",
+                      subtitleAccent: true,
+                      thClassName: "min-w-0 w-[50%]",
+                      align: "end",
+                    },
+                  ]}
                 />
               )}
             </TabsContent>
@@ -432,10 +485,19 @@ export default function RewardsPage() {
                       formatInteger(r.validator_index),
                       formatInteger(r.slot),
                       formatInteger(r.reward_gwei),
-                      r.timestamp,
                     ],
                   }))}
-                  headers={["Validator", "Slot", "Reward (gwei)", "Timestamp"]}
+                  columns={[
+                    { title: "Validator", thClassName: "w-[28%]" },
+                    { title: "Slot", thClassName: "w-[26%]" },
+                    {
+                      title: "Reward",
+                      subtitle: "gwei",
+                      subtitleAccent: true,
+                      thClassName: "min-w-0 w-[46%]",
+                      align: "end",
+                    },
+                  ]}
                 />
               )}
             </TabsContent>
@@ -467,29 +529,45 @@ export default function RewardsPage() {
 }
 
 function RewardTable({
-  headers,
+  columns,
   rows,
 }: {
-  headers: string[];
+  columns: RewardTableColumn[];
   rows: { key: string; cells: string[] }[];
 }) {
-  const lastCol = headers.length - 1;
   return (
     <div
       className={cn(
-        "glass-panel w-full overflow-auto rounded-xl border border-border/80 shadow-sm",
+        "glass-panel w-full min-w-0 overflow-auto rounded-xl border border-border/80 shadow-sm",
         "max-h-[min(70vh,520px)] md:max-h-[min(72vh,600px)] lg:max-h-[min(80vh,720px)] xl:max-h-[calc(100vh-11rem)]",
       )}
     >
-      <Table className="min-w-[720px] text-[0.8125rem] leading-snug md:min-w-0 md:text-sm lg:text-[0.9375rem] lg:leading-normal">
+      <Table className="w-full min-w-0 table-fixed text-[0.8125rem] leading-snug md:table-auto md:text-sm lg:text-[0.9375rem] lg:leading-normal">
         <TableHeader>
           <TableRow className="border-border/60 hover:bg-transparent">
-            {headers.map((h) => (
+            {columns.map((col) => (
               <TableHead
-                key={h}
-                className="whitespace-nowrap px-3 py-2.5 font-label text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground md:px-4 md:py-3 lg:text-xs"
+                key={`${col.title}-${col.subtitle ?? ""}`}
+                className={cn(
+                  "min-w-0 align-top whitespace-normal break-words px-3 py-3 font-label text-[0.62rem] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground md:px-4 md:py-3.5 lg:text-[0.7rem]",
+                  col.align === "end" && "text-right",
+                  col.align === "center" && "text-center",
+                  col.thClassName,
+                )}
               >
-                {h}
+                <span className={cn("block break-words", col.align === "end" && "text-right")}>{col.title}</span>
+                {col.subtitle ? (
+                  <span
+                    className={cn(
+                      "mt-1 block text-[0.58rem] font-medium leading-snug tracking-normal normal-case sm:text-[0.6rem]",
+                      col.subtitleAccent ? "text-primary" : "text-muted-foreground/90",
+                      col.align === "end" && "text-right",
+                      col.align === "center" && "text-center",
+                    )}
+                  >
+                    {col.subtitle}
+                  </span>
+                ) : null}
               </TableHead>
             ))}
           </TableRow>
@@ -497,22 +575,25 @@ function RewardTable({
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.key} className="border-border/40 text-foreground/95">
-              {r.cells.map((c, i) => (
-                <TableCell
-                  key={i}
-                  className={cn(
-                    "whitespace-nowrap px-3 py-2.5 align-middle md:px-4 md:py-3",
-                    i < 2 && "font-mono text-[0.875rem] font-semibold text-primary md:text-base",
-                    i >= 2 &&
-                      i < lastCol &&
-                      "font-sans tabular-nums tracking-tight text-foreground",
-                    i === lastCol &&
-                      "min-w-[11rem] max-w-[20rem] truncate font-sans text-[0.8125rem] font-normal normal-nums text-muted-foreground md:min-w-[13rem] md:text-sm",
-                  )}
-                >
-                  {c}
-                </TableCell>
-              ))}
+              {r.cells.map((c, i) => {
+                const col = columns[i];
+                return (
+                  <TableCell
+                    key={i}
+                    className={cn(
+                      "min-w-0 align-middle px-3 py-2.5 md:px-4 md:py-3",
+                      i < 2 && "font-mono text-[0.875rem] font-semibold text-primary md:text-base",
+                      i >= 2 &&
+                        "break-words font-sans tabular-nums tracking-tight text-foreground md:whitespace-nowrap",
+                      col?.align === "end" && "text-right",
+                      col?.align === "center" && "text-center",
+                      col?.tdClassName,
+                    )}
+                  >
+                    {col?.cellTitle ? <span title={c}>{c}</span> : c}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>
