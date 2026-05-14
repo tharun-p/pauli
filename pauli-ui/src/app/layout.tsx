@@ -1,4 +1,11 @@
 import type { Metadata } from "next";
+import {
+  ClerkProvider,
+  Show,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+} from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
@@ -25,7 +32,18 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${geistSans.className} min-h-screen antialiased`}
       >
-        <QueryProvider>{children}</QueryProvider>
+        <ClerkProvider>
+          <header className="flex items-center justify-end gap-2 border-b border-border px-4 py-3">
+            <Show when="signed-out">
+              <SignInButton />
+              <SignUpButton />
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+          </header>
+          <QueryProvider>{children}</QueryProvider>
+        </ClerkProvider>
       </body>
     </html>
   );
