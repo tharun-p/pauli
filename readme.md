@@ -118,7 +118,7 @@ Indexing is driven by a **realtime runner loop** (`internal/monitor/runner` + `r
 
 After **`BeforeStep`** (`BlockchainNetwork.WaitPollInterval`), one iteration does:
 
-1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **ValidatorsBalanceAtSlot** → **AttestationRewards** → **RecordLastProcessedSlot**.
+1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **ValidatorsBalanceAtSlot** → **AttestationRewards** → **BlockProposerRewards** → **SyncCommitteeRewards** → **RecordLastProcessedSlot**.
 2. **`Env().Reset(ctx)`** clears per-iteration shared state, then each step’s **`Run(env)`** runs on the **runner goroutine**.
 
 So **`polling_interval_slots`** controls **how often** that full chain runs, not “only when slot mod N == 0.”
@@ -127,7 +127,7 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 
 - **Sync** (**RealtimeEnvBootstrap**): **`Run`** only fetches **head slot** and copies configured validators into **`Env`**.
 - **Sync** (**RecordLastProcessedSlot**): runs **last**; after the rest of the chain ran without error, stores **`lastProcessedSlot`** on the runner so the next poll can **skip** when **`HeadSlot`** is unchanged.
-- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; otherwise **`ValidatorsBalanceAtSlot`** always enqueues, while **AttestationRewards** enqueues only at **epoch boundaries**. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`).
+- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; otherwise **`ValidatorsBalanceAtSlot`** always enqueues, while **AttestationRewards** enqueues only at **epoch boundaries**, and **BlockProposerRewards** / **SyncCommitteeRewards** enqueue on every new head. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`).
 
 ### What each step does (current behavior)
 
@@ -136,6 +136,8 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 | **RealtimeEnvBootstrap** | Runner (`Run` only) | Head slot and validator list on **`Env`** |
 | **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Skips if head already recorded; batched validator state at **`Env.HeadSlot`** → snapshots |
 | **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary with a prior epoch, rewards (and derived penalties) |
+| **BlockProposerRewards** | Worker (`RunAsync`) | Skips if head already recorded; when head proposer is watched, fetches block rewards and persists proposer row |
+| **SyncCommitteeRewards** | Worker (`RunAsync`) | Skips if head already recorded; sync committee reward rows for watched validators when applicable |
 | **RecordLastProcessedSlot** | Runner (`Run` only) | Sets runner **`lastProcessedSlot`** to **`Env.HeadSlot`** after a successful chain pass |
 
 **Penalties** are still written from reward processing when net reward is negative; there is no separate penalty scheduler.
@@ -165,7 +167,8 @@ flowchart LR
 pauli/
 ├── cmd/
 │   ├── pauli/                # validator monitor binary
-│   └── pauli-api/            # REST API binary (read Postgres)
+│   ├── pauli-api/            # REST API binary (read Postgres)
+│   └── devnet-equivocate/    # Kurtosis-only: post conflicting attestations (requires exported BLS secret)
 ├── config.yaml
 ├── doc/
 │   └── monitor-e2e-flow.md   # monitor/runner/steps/queue sequence diagrams
@@ -186,11 +189,18 @@ pauli/
 │   └── store/                # wires PostgreSQL store
 ├── sql/
 │   └── migrations_pg/        # SQL migrations
+├── scripts/
+│   └── kurtosis/             # env helpers + EL tx spam for Kurtosis devnets
 └── pkg/
     └── backoff/              # retry/backoff utility
 ```
 ## Kurtosis 
-'kurtosis run --enclave pauli-dev-network github.com/ethpandaops/ethereum-package --args-file ./krutosis-config/kurtosis-param.yaml'
+
+```bash
+kurtosis run --enclave pauli-dev-network github.com/ethpandaops/ethereum-package --args-file ./krutosis-config/kurtosis-param.yaml
+```
+
+Helper scripts for EL traffic and devnet slashing tests live under [`scripts/kurtosis/`](scripts/kurtosis/): source [`scripts/kurtosis/env.sh`](scripts/kurtosis/env.sh) for beacon and EL URLs (via `kurtosis port print`), run [`scripts/kurtosis/spam-tx.sh`](scripts/kurtosis/spam-tx.sh) with `PRIVATE_KEY` set to a prefunded account, optionally [`scripts/kurtosis/burst-around-proposer.sh`](scripts/kurtosis/burst-around-proposer.sh) around a validator’s proposal slots, and build [`cmd/devnet-equivocate`](cmd/devnet-equivocate) (`go build -o devnet-equivocate ./cmd/devnet-equivocate`) to post conflicting attestations using a BLS secret exported from the enclave (never commit keys).
 
 ## Notes
 

@@ -10,9 +10,18 @@ import (
 
 // Config represents the application configuration.
 type Config struct {
-	BeaconNodeURL        string   `yaml:"beacon_node_url"`
-	BeaconAPIKey         string   `yaml:"beacon_api_key,omitempty"` // Optional API key for providers like Tatum
-	Validators           []uint64 `yaml:"validators"`
+	BeaconNodeURL string `yaml:"beacon_node_url"`
+	BeaconAPIKey  string `yaml:"beacon_api_key,omitempty"` // Optional API key for providers like Tatum
+	// ExecutionNodeURL is optional JSON-RPC URL (e.g. http://localhost:8545). When set, the monitor
+	// fetches execution-layer priority fees for proposed blocks via eth_getBlockByNumber + eth_getBlockReceipts.
+	ExecutionNodeURL string `yaml:"execution_node_url,omitempty"`
+	// ExecutionAPIKey is optional; how it is sent depends on execution_auth_header (default: Bearer).
+	ExecutionAPIKey string `yaml:"execution_api_key,omitempty"`
+	// ExecutionAuthHeader selects how execution_api_key is attached: "bearer" (default, Authorization: Bearer <key>),
+	// "x_api_key" (x-api-key header), "authorization" (raw Authorization value, no Bearer prefix), "token" (Token: <key>),
+	// or "none" / "off" to send no auth headers (bare JSON-RPC), even if execution_api_key is set.
+	ExecutionAuthHeader string `yaml:"execution_auth_header,omitempty"`
+	Validators          []uint64 `yaml:"validators"`
 	PollingIntervalSlots int      `yaml:"polling_interval_slots"`
 	// SlotDurationSeconds allows overriding the default 12s slot duration.
 	// For local devnets (e.g. kurtosis) you can set this to 2.

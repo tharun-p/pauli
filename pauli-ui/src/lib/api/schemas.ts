@@ -61,6 +61,8 @@ export const blockProposerRewardRowSchema = z.object({
   slot_number: z.coerce.number(),
   block_number: z.union([z.coerce.number(), z.null()]).optional(),
   rewards: z.coerce.number(),
+  execution_priority_fees_wei: z.union([z.string(), z.null()]).optional(),
+  execution_mev_fees_wei: z.union([z.string(), z.null()]).optional(),
   timestamp: z.string(),
 });
 

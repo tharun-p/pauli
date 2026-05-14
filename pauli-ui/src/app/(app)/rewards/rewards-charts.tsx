@@ -121,13 +121,18 @@ export function RewardsChartsPanel({
   }
 
   if (tab === "proposer") {
-    const data = [...proposerRows]
-      .sort((a, b) => Number(a.slot_number) - Number(b.slot_number))
-      .slice(0, 400)
-      .map((r) => ({ slot: r.slot_number, rewardsGwei: r.rewards }));
+    const sorted = [...proposerRows].sort((a, b) => Number(a.slot_number) - Number(b.slot_number)).slice(0, 400);
+    const data = sorted.map((r) => ({
+      slot: r.slot_number,
+      rewardsGwei: r.rewards,
+      tipsGwei: priorityTipsGweiForChart(r.execution_priority_fees_wei ?? null),
+    }));
     return (
       <div className="space-y-4">
-        <ChartShell title="Proposer rewards by slot" description="Rewards (gwei) vs beacon slot — same slot & validator filter.">
+        <ChartShell
+          title="Proposer rewards by slot"
+          description="Consensus rewards (gwei) vs beacon slot — same slot & validator filter."
+        >
           {data.length === 0 ? (
             <EmptyChart />
           ) : (
@@ -142,10 +147,11 @@ export function RewardsChartsPanel({
                     border: `1px solid ${chartTheme.tooltipBorder}`,
                     borderRadius: 8,
                   }}
-                  formatter={(v) => [formatInteger(Number(v ?? 0)), "gwei"]}
+                  formatter={(v, name) => [formatInteger(Number(v ?? 0)), name === "tipsGwei" ? "tip gwei (approx)" : "gwei"]}
                   labelFormatter={(s) => `Slot ${s}`}
                 />
-                <Line type="monotone" dataKey="rewardsGwei" stroke={chartTheme.primary} dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="rewardsGwei" name="CL reward" stroke={chartTheme.primary} dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="tipsGwei" name="EL tips" stroke={chartTheme.secondary} dot={false} strokeWidth={2} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -186,6 +192,16 @@ export function RewardsChartsPanel({
       </ChartShell>
     </div>
   );
+}
+
+function priorityTipsGweiForChart(wei: string | null | undefined): number | null {
+  if (wei == null || wei === "") return null;
+  try {
+    const gwei = BigInt(1_000_000_000);
+    return Number(BigInt(wei) / gwei);
+  } catch {
+    return null;
+  }
 }
 
 function epochComponentSeries(rows: AttestationRewardRow[]) {

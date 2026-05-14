@@ -587,6 +587,14 @@ components:
         rewards:
           type: integer
           format: int64
+        execution_priority_fees_wei:
+          type: string
+          nullable: true
+          description: Sum of execution-layer priority (tip) fees in wei (decimal string).
+        execution_mev_fees_wei:
+          type: string
+          nullable: true
+          description: Reserved for future MEV attribution; null in v1.
         timestamp:
           type: string
           format: date-time
