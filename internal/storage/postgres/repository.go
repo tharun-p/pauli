@@ -193,18 +193,29 @@ func (r *Repository) SaveBlockProposerReward(ctx context.Context, row *storage.B
 
 	const query = `
 		INSERT INTO block_proposer_rewards (
-			validator_index, validator_pubkey, slot_number, block_number, rewards, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			validator_index, validator_pubkey, slot_number, block_number, rewards,
+			execution_priority_fees_wei, execution_mev_fees_wei, timestamp
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (validator_index, slot_number) DO UPDATE SET
 			validator_pubkey = EXCLUDED.validator_pubkey,
 			block_number = EXCLUDED.block_number,
 			rewards = EXCLUDED.rewards,
+			execution_priority_fees_wei = EXCLUDED.execution_priority_fees_wei,
+			execution_mev_fees_wei = EXCLUDED.execution_mev_fees_wei,
 			timestamp = EXCLUDED.timestamp
 	`
 
 	var blockNum interface{}
 	if row.BlockNumber != nil {
 		blockNum = *row.BlockNumber
+	}
+	var priWei interface{}
+	if row.ExecutionPriorityFeesWei != nil {
+		priWei = *row.ExecutionPriorityFeesWei
+	}
+	var mevWei interface{}
+	if row.ExecutionMevFeesWei != nil {
+		mevWei = *row.ExecutionMevFeesWei
 	}
 
 	_, err := r.client.Pool.Exec(ctx, query,
@@ -213,6 +224,8 @@ func (r *Repository) SaveBlockProposerReward(ctx context.Context, row *storage.B
 		row.SlotNumber,
 		blockNum,
 		row.Rewards,
+		priWei,
+		mevWei,
 		row.Timestamp,
 	)
 	if err != nil {
@@ -467,7 +480,8 @@ func (r *Repository) ListAttestationRewards(ctx context.Context, validatorIndex 
 func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*storage.BlockProposerReward, error) {
 	var sb strings.Builder
 	sb.WriteString(`
-		SELECT validator_index, validator_pubkey, slot_number, block_number, rewards, timestamp
+		SELECT validator_index, validator_pubkey, slot_number, block_number, rewards,
+			execution_priority_fees_wei, execution_mev_fees_wei, timestamp
 		FROM block_proposer_rewards
 		WHERE slot_number >= $1 AND slot_number <= $2`)
 	args := []any{fromSlot, toSlot}
@@ -490,12 +504,15 @@ func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorInde
 	for rows.Next() {
 		var row storage.BlockProposerReward
 		var blockNum sql.NullInt64
+		var priWei, mevWei sql.NullString
 		if err := rows.Scan(
 			&row.ValidatorIndex,
 			&row.ValidatorPubkey,
 			&row.SlotNumber,
 			&blockNum,
 			&row.Rewards,
+			&priWei,
+			&mevWei,
 			&row.Timestamp,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan block proposer reward: %w", err)
@@ -503,6 +520,14 @@ func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorInde
 		if blockNum.Valid {
 			bn := uint64(blockNum.Int64)
 			row.BlockNumber = &bn
+		}
+		if priWei.Valid {
+			s := priWei.String
+			row.ExecutionPriorityFeesWei = &s
+		}
+		if mevWei.Valid {
+			s := mevWei.String
+			row.ExecutionMevFeesWei = &s
 		}
 		cp := row
 		out = append(out, &cp)

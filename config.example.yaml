@@ -19,6 +19,19 @@ beacon_node_url: "http://localhost:5052"
 beacon_api_key: ""
 
 # -----------------------------------------------------------------------------
+# EXECUTION NODE (optional)
+# -----------------------------------------------------------------------------
+# JSON-RPC HTTP endpoint (e.g. Geth/Erigon on 8545). When set, priority (tip) fees
+# are summed from execution payloads for blocks your validators propose.
+# Uses eth_getBlockByNumber and eth_getBlockReceipts (full receipts).
+execution_node_url: ""
+# Required when your execution_node_url is behind an authenticated proxy (common with
+# Kurtosis / ethpandaops ethereum-package: the published "rpc" port is not bare Geth).
+execution_api_key: ""
+# bearer | x_api_key | authorization | token | none (none = never send auth headers; use for bare Geth JSON-RPC)
+execution_auth_header: ""
+
+# -----------------------------------------------------------------------------
 # VALIDATORS
 # -----------------------------------------------------------------------------
 # List of validator indices to monitor

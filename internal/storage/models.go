@@ -35,12 +35,14 @@ type AttestationReward struct {
 
 // BlockProposerReward is one row when a monitored validator proposed a block at slot_number.
 type BlockProposerReward struct {
-	ValidatorIndex  uint64    `json:"validator_index"`
-	ValidatorPubkey string    `json:"validator_pubkey"`
-	SlotNumber      uint64    `json:"slot_number"`
-	BlockNumber     *uint64   `json:"block_number,omitempty"` // Execution layer block number when available
-	Rewards         uint64    `json:"rewards"`                // Proposer reward total (gwei)
-	Timestamp       time.Time `json:"timestamp"`
+	ValidatorIndex           uint64    `json:"validator_index"`
+	ValidatorPubkey          string    `json:"validator_pubkey"`
+	SlotNumber               uint64    `json:"slot_number"`
+	BlockNumber              *uint64   `json:"block_number,omitempty"`                // Execution layer block number when available
+	Rewards                  uint64    `json:"rewards"`                               // Proposer reward total (gwei)
+	ExecutionPriorityFeesWei *string   `json:"execution_priority_fees_wei,omitempty"` // Sum of priority tips (wei), decimal string
+	ExecutionMevFeesWei      *string   `json:"execution_mev_fees_wei,omitempty"`      // Reserved; NULL in v1
+	Timestamp                time.Time `json:"timestamp"`
 }
 
 // SyncCommitteeReward is one row of sync committee reward for a validator at a beacon block slot.

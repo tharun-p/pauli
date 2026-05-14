@@ -13,5 +13,5 @@ network_params:
   num_validator_keys_per_node: 128
 
 additional_services:
-  - blockscout
   - dora
+  - blockscout

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tharun/pauli/internal/beacon"
+	"github.com/tharun/pauli/internal/execution"
 	"github.com/tharun/pauli/internal/monitor/steps"
 	"github.com/tharun/pauli/internal/storage"
 )
@@ -17,6 +18,7 @@ import (
 // Skips when HeadSlot matches LastProcessedSlot (same dedupe contract as other realtime steps).
 type BlockProposerRewards struct {
 	Client            *beacon.Client
+	Execution         *execution.Client
 	Repo              storage.Repository
 	Validators        []uint64
 	Log               zerolog.Logger
@@ -92,6 +94,16 @@ func (s *BlockProposerRewards) RunAsync(ctx context.Context, e *steps.Env) error
 		BlockNumber:     execBlock,
 		Rewards:         rewardsData.Total.Uint64(),
 		Timestamp:       time.Now().UTC(),
+	}
+
+	if s.Execution != nil && execBlock != nil {
+		prio, err := s.Execution.PriorityFeesWeiDecimalString(ctx, *execBlock)
+		if err != nil {
+			s.Log.Warn().Err(err).Uint64("slot", e.HeadSlot).Uint64("block_number", *execBlock).
+				Msg("execution priority fees fetch failed; storing null EL columns")
+		} else {
+			row.ExecutionPriorityFeesWei = &prio
+		}
 	}
 
 	if err := s.Repo.SaveBlockProposerReward(ctx, row); err != nil {

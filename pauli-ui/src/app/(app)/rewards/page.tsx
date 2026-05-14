@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { fetchAllAttestationRewards } from "@/lib/api/attestation-rewards";
 import { fetchAllBlockProposerRewards } from "@/lib/api/block-proposer-rewards";
 import { fetchAllSyncCommitteeRewards } from "@/lib/api/sync-committee-rewards";
-import { formatGweiEth, formatInteger } from "@/lib/format";
+import { formatGweiEth, formatInteger, formatWeiEth } from "@/lib/format";
 import { RewardsChartsPanel } from "./rewards-charts";
 
 type Tab = "attestation" | "proposer" | "sync";
@@ -457,16 +457,24 @@ export default function RewardsPage() {
                       formatInteger(r.validator_index),
                       formatInteger(r.slot_number),
                       formatGweiEth(r.rewards),
+                      formatWeiEth(r.execution_priority_fees_wei ?? null),
                     ],
                   }))}
                   columns={[
-                    { title: "Validator", thClassName: "w-[26%]" },
-                    { title: "Slot", thClassName: "w-[24%]" },
+                    { title: "Validator", thClassName: "w-[18%]" },
+                    { title: "Slot", thClassName: "w-[16%]" },
                     {
-                      title: "Reward",
+                      title: "CL reward",
                       subtitle: "ETH",
                       subtitleAccent: true,
-                      thClassName: "min-w-0 w-[50%]",
+                      thClassName: "min-w-0 w-[28%]",
+                      align: "end",
+                    },
+                    {
+                      title: "EL tips",
+                      subtitle: "ETH",
+                      subtitleAccent: true,
+                      thClassName: "min-w-0 w-[38%]",
                       align: "end",
                     },
                   ]}

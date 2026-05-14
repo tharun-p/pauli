@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/tharun/pauli/internal/beacon"
 	"github.com/tharun/pauli/internal/config"
+	"github.com/tharun/pauli/internal/execution"
 	"github.com/tharun/pauli/internal/monitor/queue"
 	runrealtime "github.com/tharun/pauli/internal/monitor/runner/realtime"
 	"github.com/tharun/pauli/internal/storage"
@@ -15,13 +16,13 @@ import (
 // Monitor wires the network clock, runners, and a concurrent queue (workers run steps.Job via Step.RunAsync).
 // Indexing uses runner/realtime.Runner (runner.Runner) only; historical backfill can be added later.
 type Monitor struct {
-	cfg               *config.Config
-	client            *beacon.Client
-	repo              storage.Repository
+	cfg     *config.Config
+	client  *beacon.Client
+	repo    storage.Repository
 	network *config.BlockchainNetwork
 	pool    *queue.Pool
-	logger            zerolog.Logger
-	wg                sync.WaitGroup
+	logger  zerolog.Logger
+	wg      sync.WaitGroup
 }
 
 // NewMonitor creates a new Monitor instance.
@@ -49,7 +50,8 @@ func (m *Monitor) Start(ctx context.Context) error {
 	m.logNodeSyncStatus(ctx)
 
 	enqueue := m.pool.Enqueue
-	realtimeR := runrealtime.New(m.network, m.client, m.repo, m.client.GetHeadSlot, m.cfg.Validators, m.logger, enqueue)
+	execClient := execution.NewClient(m.cfg)
+	realtimeR := runrealtime.New(m.network, m.client, execClient, m.repo, m.client.GetHeadSlot, m.cfg.Validators, m.logger, enqueue)
 
 	m.pool.Start(ctx)
 

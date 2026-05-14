@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/tharun/pauli/internal/beacon"
 	"github.com/tharun/pauli/internal/config"
+	"github.com/tharun/pauli/internal/execution"
 	"github.com/tharun/pauli/internal/monitor/runner"
 	"github.com/tharun/pauli/internal/monitor/steps"
 	steprt "github.com/tharun/pauli/internal/monitor/steps/realtime"
@@ -17,6 +18,7 @@ import (
 type Runner struct {
 	network    *config.BlockchainNetwork
 	client     *beacon.Client
+	exec       *execution.Client
 	repo       storage.Repository
 	getHead    func(context.Context) (uint64, error)
 	validators []uint64
@@ -34,6 +36,7 @@ var _ runner.Runner = (*Runner)(nil)
 func New(
 	network *config.BlockchainNetwork,
 	client *beacon.Client,
+	exec *execution.Client,
 	repo storage.Repository,
 	getHead func(context.Context) (uint64, error),
 	validators []uint64,
@@ -43,6 +46,7 @@ func New(
 	return &Runner{
 		network:    network,
 		client:     client,
+		exec:       exec,
 		repo:       repo,
 		getHead:    getHead,
 		validators: validators,
@@ -106,6 +110,7 @@ func (r *Runner) stepChain() []steps.Step {
 		},
 		&steprt.BlockProposerRewards{
 			Client:            r.client,
+			Execution:         r.exec,
 			Repo:              r.repo,
 			Validators:        r.validators,
 			Log:               r.log,
