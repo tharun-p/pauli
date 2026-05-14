@@ -185,14 +185,14 @@ func (r *Repository) SaveAttestationRewards(ctx context.Context, rewards []*stor
 	return nil
 }
 
-// SaveBlockProposerReward upserts a block proposer reward row.
-func (r *Repository) SaveBlockProposerReward(ctx context.Context, row *storage.BlockProposerReward) error {
+// SaveBlock upserts one indexed block row (canonical proposer at slot).
+func (r *Repository) SaveBlock(ctx context.Context, row *storage.Block) error {
 	if row.Timestamp.IsZero() {
 		row.Timestamp = time.Now().UTC()
 	}
 
 	const query = `
-		INSERT INTO block_proposer_rewards (
+		INSERT INTO blocks (
 			validator_index, validator_pubkey, slot_number, block_number, rewards,
 			execution_priority_fees_wei, execution_mev_fees_wei, timestamp
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -229,15 +229,15 @@ func (r *Repository) SaveBlockProposerReward(ctx context.Context, row *storage.B
 		row.Timestamp,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to save block proposer reward: %w", err)
+		return fmt.Errorf("failed to save block: %w", err)
 	}
 	return nil
 }
 
-// SaveBlockProposerRewards saves multiple block proposer reward rows.
-func (r *Repository) SaveBlockProposerRewards(ctx context.Context, rows []*storage.BlockProposerReward) error {
+// SaveBlocks saves multiple indexed block rows.
+func (r *Repository) SaveBlocks(ctx context.Context, rows []*storage.Block) error {
 	for _, row := range rows {
-		if err := r.SaveBlockProposerReward(ctx, row); err != nil {
+		if err := r.SaveBlock(ctx, row); err != nil {
 			return err
 		}
 	}
@@ -476,13 +476,13 @@ func (r *Repository) ListAttestationRewards(ctx context.Context, validatorIndex 
 	return rewards, nil
 }
 
-// ListBlockProposerRewards returns block proposer rewards for a slot range, optionally filtered to one validator.
-func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*storage.BlockProposerReward, error) {
+// ListBlocks returns indexed blocks for a slot range, optionally filtered to one proposer validator_index.
+func (r *Repository) ListBlocks(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*storage.Block, error) {
 	var sb strings.Builder
 	sb.WriteString(`
 		SELECT validator_index, validator_pubkey, slot_number, block_number, rewards,
 			execution_priority_fees_wei, execution_mev_fees_wei, timestamp
-		FROM block_proposer_rewards
+		FROM blocks
 		WHERE slot_number >= $1 AND slot_number <= $2`)
 	args := []any{fromSlot, toSlot}
 	argPos := 3
@@ -496,13 +496,13 @@ func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorInde
 
 	rows, err := r.client.Pool.Query(ctx, sb.String(), args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list block proposer rewards: %w", err)
+		return nil, fmt.Errorf("failed to list blocks: %w", err)
 	}
 	defer rows.Close()
 
-	var out []*storage.BlockProposerReward
+	var out []*storage.Block
 	for rows.Next() {
-		var row storage.BlockProposerReward
+		var row storage.Block
 		var blockNum sql.NullInt64
 		var priWei, mevWei sql.NullString
 		if err := rows.Scan(
@@ -515,7 +515,7 @@ func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorInde
 			&mevWei,
 			&row.Timestamp,
 		); err != nil {
-			return nil, fmt.Errorf("failed to scan block proposer reward: %w", err)
+			return nil, fmt.Errorf("failed to scan block: %w", err)
 		}
 		if blockNum.Valid {
 			bn := uint64(blockNum.Int64)
@@ -533,7 +533,7 @@ func (r *Repository) ListBlockProposerRewards(ctx context.Context, validatorInde
 		out = append(out, &cp)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate block proposer rewards: %w", err)
+		return nil, fmt.Errorf("failed to iterate blocks: %w", err)
 	}
 	return out, nil
 }

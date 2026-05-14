@@ -10,8 +10,8 @@ type Repository interface {
 	SaveAttestationDuties(ctx context.Context, duties []*AttestationDuty) error
 	SaveAttestationReward(ctx context.Context, reward *AttestationReward) error
 	SaveAttestationRewards(ctx context.Context, rewards []*AttestationReward) error
-	SaveBlockProposerReward(ctx context.Context, row *BlockProposerReward) error
-	SaveBlockProposerRewards(ctx context.Context, rows []*BlockProposerReward) error
+	SaveBlock(ctx context.Context, row *Block) error
+	SaveBlocks(ctx context.Context, rows []*Block) error
 	SaveSyncCommitteeReward(ctx context.Context, row *SyncCommitteeReward) error
 	SaveSyncCommitteeRewards(ctx context.Context, rows []*SyncCommitteeReward) error
 	SaveValidatorPenalty(ctx context.Context, penalty *ValidatorPenalty) error
@@ -20,7 +20,7 @@ type Repository interface {
 	GetAttestationRewards(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64) ([]*AttestationReward, error)
 	// ListAttestationRewards returns attestation rewards in epoch order (newest epoch first). If validatorIndex is nil, all validators are included.
 	ListAttestationRewards(ctx context.Context, validatorIndex *uint64, fromEpoch, toEpoch uint64, limit, offset int) ([]*AttestationReward, error)
-	ListBlockProposerRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*BlockProposerReward, error)
+	ListBlocks(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*Block, error)
 	ListSyncCommitteeRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*SyncCommitteeReward, error)
 	GetValidatorPenalties(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64, limit, offset int) ([]*ValidatorPenalty, error)
 	ListValidators(ctx context.Context, limit, offset int) ([]uint64, error)

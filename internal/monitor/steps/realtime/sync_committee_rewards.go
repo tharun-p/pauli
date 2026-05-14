@@ -14,7 +14,7 @@ import (
 
 // SyncCommitteeRewards (async): for the canonical head block, fetches sync committee rewards
 // for configured validators and persists rows per (validator_index, slot).
-// Skips when HeadSlot matches LastProcessedSlot (same dedupe contract as BlockProposerRewards).
+// Skips when HeadSlot matches LastProcessedSlot (same dedupe contract as BlockIndexer).
 type SyncCommitteeRewards struct {
 	Client            *beacon.Client
 	Repo              storage.Repository

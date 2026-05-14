@@ -80,7 +80,7 @@ func (a *API) listBlockProposerRewards(c *gin.Context, pathValidator *uint64) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), requestTimeout)
 	defer cancel()
-	rows, err := a.Store.Repository().ListBlockProposerRewards(ctx, scope, fromS, toS, limit, offset)
+	rows, err := a.Store.Repository().ListBlocks(ctx, scope, fromS, toS, limit, offset)
 	if err != nil {
 		writeInternal(c)
 		return
