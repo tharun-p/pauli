@@ -33,8 +33,8 @@ type AttestationReward struct {
 	Timestamp      time.Time `json:"timestamp"`
 }
 
-// BlockProposerReward is one row when a monitored validator proposed a block at slot_number.
-type BlockProposerReward struct {
+// Block is one indexed canonical beacon block at slot_number (proposer CL rewards and optional EL fee fields).
+type Block struct {
 	ValidatorIndex           uint64    `json:"validator_index"`
 	ValidatorPubkey          string    `json:"validator_pubkey"`
 	SlotNumber               uint64    `json:"slot_number"`

@@ -13,49 +13,41 @@ import (
 	"github.com/tharun/pauli/internal/storage"
 )
 
-// BlockProposerRewards (async): when the canonical head block was proposed by one
-// of the configured validators, fetches block rewards and persists a row.
+// BlockIndexer (async): for each new canonical head slot, fetches proposer metadata, CL block rewards,
+// and optional EL priority fees, then upserts one row per slot (network-wide; not scoped to watched validators).
 // Skips when HeadSlot matches LastProcessedSlot (same dedupe contract as other realtime steps).
-type BlockProposerRewards struct {
+type BlockIndexer struct {
 	Client            *beacon.Client
 	Execution         *execution.Client
 	Repo              storage.Repository
-	Validators        []uint64
 	Log               zerolog.Logger
 	LastProcessedSlot *uint64
 }
 
-var _ Step = (*BlockProposerRewards)(nil)
+var _ Step = (*BlockIndexer)(nil)
 
-func (*BlockProposerRewards) Async() bool { return true }
+func (*BlockIndexer) Async() bool { return true }
 
-func (s *BlockProposerRewards) Run(e *steps.Env) (bool, error) {
+func (s *BlockIndexer) Run(e *steps.Env) (bool, error) {
 	if s.LastProcessedSlot != nil && e.HeadSlot == *s.LastProcessedSlot {
 		return false, nil
 	}
 	return true, nil
 }
 
-func (s *BlockProposerRewards) RunAsync(ctx context.Context, e *steps.Env) error {
-	if len(s.Validators) == 0 {
-		return nil
-	}
-
+func (s *BlockIndexer) RunAsync(ctx context.Context, e *steps.Env) error {
 	blockID := strconv.FormatUint(e.HeadSlot, 10)
 
 	header, err := s.Client.GetBlockHeader(ctx, blockID)
 	if err != nil {
 		if beacon.IsNotFound(err) {
-			s.Log.Debug().Err(err).Uint64("slot", e.HeadSlot).Msg("realtime: block header not found for proposer check")
+			s.Log.Debug().Err(err).Uint64("slot", e.HeadSlot).Msg("realtime: block header not found for block indexer")
 			return nil
 		}
-		return fmt.Errorf("block header for proposer rewards: %w", err)
+		return fmt.Errorf("block header for block indexer: %w", err)
 	}
 
 	proposerIndex := header.Data.Header.Message.ProposerIndex.Uint64()
-	if !validatorIndexWatched(s.Validators, proposerIndex) {
-		return nil
-	}
 
 	rewardsData, err := s.Client.GetBlockRewards(ctx, blockID)
 	if err != nil {
@@ -87,7 +79,7 @@ func (s *BlockProposerRewards) RunAsync(ctx context.Context, e *steps.Env) error
 		execBlock = nil
 	}
 
-	row := &storage.BlockProposerReward{
+	row := &storage.Block{
 		ValidatorIndex:  proposerIndex,
 		ValidatorPubkey: pubkey,
 		SlotNumber:      e.HeadSlot,
@@ -106,24 +98,15 @@ func (s *BlockProposerRewards) RunAsync(ctx context.Context, e *steps.Env) error
 		}
 	}
 
-	if err := s.Repo.SaveBlockProposerReward(ctx, row); err != nil {
-		return fmt.Errorf("save block proposer reward: %w", err)
+	if err := s.Repo.SaveBlock(ctx, row); err != nil {
+		return fmt.Errorf("save block: %w", err)
 	}
 
 	s.Log.Debug().
 		Uint64("slot", e.HeadSlot).
 		Uint64("validator_index", proposerIndex).
 		Uint64("rewards_gwei", row.Rewards).
-		Msg("saved block proposer reward")
+		Msg("saved indexed block")
 
 	return nil
-}
-
-func validatorIndexWatched(validators []uint64, index uint64) bool {
-	for _, v := range validators {
-		if v == index {
-			return true
-		}
-	}
-	return false
 }

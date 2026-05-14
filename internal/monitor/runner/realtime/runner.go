@@ -108,11 +108,10 @@ func (r *Runner) stepChain() []steps.Step {
 			Log:               r.log,
 			LastProcessedSlot: &r.lastProcessedSlot,
 		},
-		&steprt.BlockProposerRewards{
+		&steprt.BlockIndexer{
 			Client:            r.client,
 			Execution:         r.exec,
 			Repo:              r.repo,
-			Validators:        r.validators,
 			Log:               r.log,
 			LastProcessedSlot: &r.lastProcessedSlot,
 		},

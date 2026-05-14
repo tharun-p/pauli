@@ -571,6 +571,7 @@ components:
 
     BlockProposerReward:
       type: object
+      description: Indexed canonical beacon block at slot_number (stored in table `blocks`).
       properties:
         validator_index:
           type: integer
