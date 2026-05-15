@@ -63,23 +63,6 @@ type SyncCommitteeReward struct {
 	Timestamp           time.Time `json:"timestamp"`
 }
 
-// ValidatorPenalty represents a penalty applied to a validator.
-type ValidatorPenalty struct {
-	ValidatorIndex uint64    `json:"validator_index"`
-	Epoch          uint64    `json:"epoch"`
-	Slot           uint64    `json:"slot"`
-	PenaltyType    string    `json:"penalty_type"` // slashing, inactivity_leak, attestation_miss
-	PenaltyGwei    int64     `json:"penalty_gwei"` // Penalty amount (positive value)
-	Timestamp      time.Time `json:"timestamp"`
-}
-
-// PenaltyType constants
-const (
-	PenaltyTypeSlashing        = "slashing"
-	PenaltyTypeInactivityLeak  = "inactivity_leak"
-	PenaltyTypeAttestationMiss = "attestation_miss"
-)
-
 // ValidatorStatus constants from Beacon API
 const (
 	StatusPendingInitialized = "pending_initialized"

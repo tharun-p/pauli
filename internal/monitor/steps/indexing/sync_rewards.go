@@ -1,4 +1,4 @@
-package realtime
+package indexing
 
 import (
 	"strconv"
@@ -7,7 +7,6 @@ import (
 	"github.com/tharun/pauli/internal/storage"
 )
 
-// blockSyncCommitteeRewardsFromBeacon maps a beacon sync committee rewards response to storage JSONB shape.
 func blockSyncCommitteeRewardsFromBeacon(result *beacon.SyncCommitteeRewardsResult) *storage.BlockSyncCommitteeRewards {
 	if result == nil {
 		return nil

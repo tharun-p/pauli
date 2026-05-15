@@ -83,6 +83,11 @@ func (r *Runner) StepChain(ctx context.Context) ([]steps.Step, bool, error) {
 
 func (r *Runner) SleepOnSeedError() time.Duration { return 0 }
 
+// SetLastProcessedSlot seeds the in-memory dedup cursor (e.g. from indexer_progress on startup).
+func (r *Runner) SetLastProcessedSlot(slot uint64) {
+	r.lastProcessedSlot = slot
+}
+
 func (r *Runner) Start(ctx context.Context) {
 	runner.Run(ctx, r)
 }

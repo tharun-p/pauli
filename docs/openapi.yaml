@@ -363,44 +363,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /v1/validators/{validatorIndex}/penalties:
-    get:
-      summary: Validator penalties in an epoch range
-      operationId: listPenalties
-      parameters:
-        - $ref: "#/components/parameters/validatorIndexPath"
-        - name: epoch
-          in: query
-          schema:
-            type: integer
-            format: int64
-            minimum: 0
-        - name: from_epoch
-          in: query
-          schema:
-            type: integer
-            format: int64
-            minimum: 0
-        - name: to_epoch
-          in: query
-          schema:
-            type: integer
-            format: int64
-            minimum: 0
-        - $ref: "#/components/parameters/limit"
-        - $ref: "#/components/parameters/offset"
-      responses:
-        "200":
-          description: Paginated penalties
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ValidatorPenaltyListResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
 components:
   parameters:
     limit:
@@ -639,37 +601,5 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SyncCommitteeReward"
-        meta:
-          $ref: "#/components/schemas/ListMeta"
-
-    ValidatorPenalty:
-      type: object
-      properties:
-        validator_index:
-          type: integer
-          format: int64
-        epoch:
-          type: integer
-          format: int64
-        slot:
-          type: integer
-          format: int64
-        penalty_type:
-          type: string
-        penalty_gwei:
-          type: integer
-          format: int64
-        timestamp:
-          type: string
-          format: date-time
-
-    ValidatorPenaltyListResponse:
-      type: object
-      required: [data, meta]
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/ValidatorPenalty"
         meta:
           $ref: "#/components/schemas/ListMeta"

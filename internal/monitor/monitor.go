@@ -9,6 +9,7 @@ import (
 	"github.com/tharun/pauli/internal/config"
 	"github.com/tharun/pauli/internal/execution"
 	"github.com/tharun/pauli/internal/monitor/queue"
+	runbackfill "github.com/tharun/pauli/internal/monitor/runner/backfill"
 	runrealtime "github.com/tharun/pauli/internal/monitor/runner/realtime"
 	"github.com/tharun/pauli/internal/storage"
 )
@@ -43,7 +44,7 @@ func NewMonitor(cfg *config.Config, client *beacon.Client, repo storage.Reposito
 
 // Start begins the monitoring loop.
 func (m *Monitor) Start(ctx context.Context) error {
-	if err := initBeaconNetworkClock(ctx, m.client, m.network, m.logger); err != nil {
+	if err := InitBeaconNetworkClock(ctx, m.client, m.network, m.logger); err != nil {
 		return err
 	}
 
@@ -52,14 +53,27 @@ func (m *Monitor) Start(ctx context.Context) error {
 	enqueue := m.pool.Enqueue
 	execClient := execution.NewClient(m.cfg)
 	realtimeR := runrealtime.New(m.network, m.client, execClient, m.repo, m.client.GetHeadSlot, m.cfg.Validators, m.logger, enqueue)
+	if maxSlot, ok, err := m.repo.MaxIndexedSlot(ctx); err != nil {
+		m.logger.Warn().Err(err).Msg("seed realtime cursor: max indexed slot lookup failed")
+	} else if ok {
+		realtimeR.SetLastProcessedSlot(maxSlot)
+		m.logger.Debug().Uint64("last_processed_slot", maxSlot).Msg("seeded realtime cursor from indexer_progress")
+	}
 
 	m.pool.Start(ctx)
 
 	m.startBackgroundWorker(ctx, func(runCtx context.Context) { realtimeR.Start(runCtx) })
 
+	if m.cfg.Backfill.Enabled {
+		backfillR := runbackfill.New(m.cfg.Backfill, runbackfill.Options{}, m.client, execClient, m.repo, m.client.GetHeadSlot, m.logger.With().Str("runner", "backfill").Logger(), enqueue)
+		m.startBackgroundWorker(ctx, func(runCtx context.Context) { backfillR.Start(runCtx) })
+		m.logger.Info().Msg("backfill runner started")
+	}
+
 	m.logger.Info().
 		Int("validators", len(m.cfg.Validators)).
 		Int("workers", m.cfg.WorkerPoolSize).
+		Bool("backfill", m.cfg.Backfill.Enabled).
 		Msg("monitor started")
 
 	return nil
@@ -73,7 +87,7 @@ func (m *Monitor) startBackgroundWorker(ctx context.Context, run func(context.Co
 	}()
 }
 
-// Stop shuts down the monitor: waits for the realtime runner to exit (caller should cancel its context first),
+// Stop shuts down the monitor: waits for runners to exit (caller should cancel its context first),
 // then drains the worker pool using drainCtx for in-flight and queued jobs.
 func (m *Monitor) Stop(drainCtx context.Context) {
 	if drainCtx == nil {

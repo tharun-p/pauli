@@ -67,6 +67,12 @@ func (c *Client) GetValidators(ctx context.Context, stateID string, validatorIDs
 	return resp.Data, nil
 }
 
+// GetValidatorsAllAtSlot fetches every validator's state at slot (single beacon request).
+func (c *Client) GetValidatorsAllAtSlot(ctx context.Context, slot uint64) ([]Validator, error) {
+	stateID := strconv.FormatUint(slot, 10)
+	return c.GetValidators(ctx, stateID, nil)
+}
+
 // GetValidatorsAtSlot fetches the given validators' state at slot in one or more
 // chunked GET requests (see MaxValidatorIDsPerGetValidators).
 func (c *Client) GetValidatorsAtSlot(ctx context.Context, slot uint64, validatorIDs []uint64) ([]Validator, error) {

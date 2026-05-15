@@ -32,6 +32,28 @@ type Config struct {
 	// DatabaseDriver is optional; only "postgres" is supported (default when empty).
 	DatabaseDriver string       `yaml:"database_driver,omitempty"`
 	Postgres       PostgresConf `yaml:"postgres"`
+	Backfill       BackfillConf `yaml:"backfill"`
+}
+
+// BackfillConf configures the historical backfill runner (slot + epoch tracks).
+type BackfillConf struct {
+	Enabled       bool    `yaml:"enabled"`
+	StartSlot     uint64  `yaml:"start_slot"`
+	StartEpoch    uint64  `yaml:"start_epoch"`
+	EndSlot       *uint64 `yaml:"end_slot,omitempty"`
+	EndEpoch      *uint64 `yaml:"end_epoch,omitempty"`
+	LagBehindHead uint64  `yaml:"lag_behind_head"`
+	SlotsPerPass  int     `yaml:"slots_per_pass"`
+	EpochsPerPass int     `yaml:"epochs_per_pass"`
+	PollDelayMs   int     `yaml:"poll_delay_ms"`
+}
+
+// PollDelay returns pacing between backfill passes when idle or between iterations.
+func (b *BackfillConf) PollDelay() time.Duration {
+	if b.PollDelayMs <= 0 {
+		return 100 * time.Millisecond
+	}
+	return time.Duration(b.PollDelayMs) * time.Millisecond
 }
 
 // RateLimitConf configures the rate limiter.
@@ -182,4 +204,20 @@ func (c *Config) setDefaults() {
 		c.DatabaseDriver = "postgres"
 	}
 	c.Postgres.ApplyDefaults()
+	c.Backfill.setDefaults()
+}
+
+func (b *BackfillConf) setDefaults() {
+	if b.LagBehindHead == 0 {
+		b.LagBehindHead = 4
+	}
+	if b.SlotsPerPass <= 0 {
+		b.SlotsPerPass = 8
+	}
+	if b.EpochsPerPass <= 0 {
+		b.EpochsPerPass = 2
+	}
+	if b.PollDelayMs <= 0 {
+		b.PollDelayMs = 100
+	}
 }

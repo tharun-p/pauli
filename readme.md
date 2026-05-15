@@ -11,7 +11,7 @@ This project is a data indexing service for validator operations. It is **not** 
 - Indexes **attestation rewards** at **epoch boundaries** when scheduled (async workers)
 - Persists indexed records to the configured backend (TTL / retention via `ttl_days` where applicable)
 - Default logs **info** (lifecycle), **warn** (probes / sync), and **errors** (indexing, beacon, runner); use **`-debug`** for verbose request/step logging
-- **No historical catch-up** yet: one realtime pass per poll, not a multi-slot reconciliation cursor
+- **Realtime** indexes the chain head each poll; optional **backfill** catches up slots and epochs behind head (see `backfill` config)
 
 ## Requirements
 
@@ -97,16 +97,20 @@ Endpoints:
 
 ## Indexed Data
 
-Pauli currently stores four validator-focused datasets:
+Pauli currently stores three validator-focused datasets:
 
 - `validator_snapshots`: status, balance, effective balance per slot
 - `attestation_duties`: duty assignment data per epoch/slot
-- `attestation_rewards`: head/source/target rewards per epoch
-- `validator_penalties`: slashing/inactivity penalty records
+- `attestation_rewards`: head/source/target rewards per epoch (negative `total_reward` reflects penalties)
 
 ## How Indexing Is Scheduled
 
-Indexing is driven by a **realtime runner loop** (`internal/monitor/runner` + `runner/realtime`), not a multi-slot reconciliation cursor. Each cycle waits for **`polling_interval_slots` × slot duration**, then runs a fixed **chain of steps** from `internal/monitor/steps/realtime`. For package-level flow diagrams, see **`doc/monitor-e2e-flow.md`**.
+Indexing uses two runners when backfill is enabled:
+
+- **Realtime** (`runner/realtime`): one head slot per poll (`polling_interval_slots` × slot duration), steps in `steps/realtime`.
+- **Backfill** (`runner/backfill`): walks missing slots and epochs up to `head - lag_behind_head`, steps in `steps/backfill`, progress in Postgres `indexer_progress`.
+
+See **`doc/monitor-e2e-flow.md`** for diagrams.
 
 ### Time and epochs
 
@@ -135,29 +139,40 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 |------|------------------|------|
 | **RealtimeEnvBootstrap** | Runner (`Run` only) | Head slot and validator list on **`Env`** |
 | **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Skips if head already recorded; batched validator state at **`Env.HeadSlot`** → snapshots |
-| **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary with a prior epoch, rewards (and derived penalties) |
+| **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary with a prior epoch, attestation rewards |
 | **BlockIndexer** | Worker (`RunAsync`) | Skips if head already recorded; indexes the canonical head block (proposer, CL rewards, all sync committee rewards as JSONB on **`blocks`**, optional EL priority fees) |
 | **RecordLastProcessedSlot** | Runner (`Run` only) | Sets runner **`lastProcessedSlot`** to **`Env.HeadSlot`** after a successful chain pass |
 
-**Penalties** are still written from reward processing when net reward is negative; there is no separate penalty scheduler.
+**BlockIndexer** also calls **`MarkSlotIndexed`** after a successful async write (shared with backfill).
 
-### Out of scope today
+### Backfill runner (`backfill.enabled: true`)
 
-- **Historical backfill** / catch-up over many slots or epochs in one process is **not** implemented; the README’s older “cursor + cap per pass” description referred to a design that is **not** in the current tree.
+| Track | Steps | Progress |
+|-------|-------|----------|
+| **Slots** | **SlotPass** → shared block indexer (`steps/indexing`) | `indexer_progress` kind `slot` (includes empty slots) |
+| **Epochs** | **EpochPass** → all-validator balances + attestation rewards | `indexer_progress` kind `epoch` |
+
+Tune **`slots_per_pass`**, **`epochs_per_pass`**, and **`worker_pool_size`** so backfill does not starve realtime RPC.
+
+One-shot historic jobs: **`go run ./cmd/pauli-backfill`** with `-from-slot`, `-to-slot`, `-from-epoch`, `-to-epoch` (see `config.example.yaml`).
 
 ## High-Level Flow
 
 ```mermaid
 flowchart LR
     A[Monitor] --> B[runner/realtime]
+    A --> BF[runner/backfill]
     B --> C[BeforeStep: poll interval]
     C --> D[Step chain: steps/realtime]
     D --> E[Sync Run on runner]
     D --> F[Enqueue steps.Job]
     F --> G[Worker pool]
     G --> H[RunAsync → Beacon API]
-    G --> I[RunAsync → Repository]
-    I --> J[(PostgreSQL)]
+    BF --> I[SlotPass + EpochPass]
+    I --> H
+    G --> J[RunAsync → Repository]
+    I --> K[(indexer_progress)]
+    J --> L[(PostgreSQL)]
 ```
 
 ## Project Layout
@@ -167,6 +182,7 @@ pauli/
 ├── cmd/
 │   ├── pauli/                # validator monitor binary
 │   ├── pauli-api/            # REST API binary (read Postgres)
+│   ├── pauli-backfill/       # one-shot historical slot/epoch backfill
 │   └── devnet-equivocate/    # Kurtosis-only: post conflicting attestations (requires exported BLS secret)
 ├── config.yaml
 ├── doc/
@@ -195,9 +211,13 @@ pauli/
 ```
 ## Kurtosis 
 
+[`krutosis-config/kurtosis-param.yaml`](krutosis-config/kurtosis-param.yaml) runs a **single archive participant** (Geth `el_storage_type: archive`, Lighthouse `--reconstruct-historic-states`, checkpoint sync disabled) so Pauli backfill can query historic beacon states (e.g. `/eth/v1/beacon/states/{slot}/validators`).
+
 ```bash
 kurtosis run --enclave pauli-dev-network github.com/ethpandaops/ethereum-package --args-file ./krutosis-config/kurtosis-param.yaml
 ```
+
+After the enclave is up, point `beacon_node_url` / `execution_node_url` in your Pauli config at the CL/EL ports (`source scripts/kurtosis/env.sh` for URLs). Allow the node to advance past the slots you backfill; historic states for a slot exist once the chain has processed that slot with reconstruction enabled.
 
 Helper scripts for EL traffic and devnet slashing tests live under [`scripts/kurtosis/`](scripts/kurtosis/): source [`scripts/kurtosis/env.sh`](scripts/kurtosis/env.sh) for beacon and EL URLs (via `kurtosis port print`), run [`scripts/kurtosis/spam-tx.sh`](scripts/kurtosis/spam-tx.sh) with `PRIVATE_KEY` set to a prefunded account, optionally [`scripts/kurtosis/burst-around-proposer.sh`](scripts/kurtosis/burst-around-proposer.sh) around a validator’s proposal slots, and build [`cmd/devnet-equivocate`](cmd/devnet-equivocate) (`go build -o devnet-equivocate ./cmd/devnet-equivocate`) to post conflicting attestations using a BLS secret exported from the enclave (never commit keys).
 
