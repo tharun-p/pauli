@@ -64,7 +64,7 @@ type SyncCommitteeRewardsResult struct {
 
 // GetSyncCommitteeRewards fetches per-validator sync committee rewards for a beacon block.
 // blockID may be a slot string, "head", "finalized", genesis, or a block root (0x-prefixed hex).
-// validatorIndices limits the response to those validators (decimal string body per spec).
+// When validatorIndices is nil or empty, the request body is [] and the node returns every sync committee member.
 func (c *Client) GetSyncCommitteeRewards(ctx context.Context, blockID string, validatorIndices []uint64) (*SyncCommitteeRewardsResult, error) {
 	path := fmt.Sprintf("/eth/v1/beacon/rewards/sync_committee/%s", url.PathEscape(blockID))
 

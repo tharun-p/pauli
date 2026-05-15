@@ -33,16 +33,24 @@ type AttestationReward struct {
 	Timestamp      time.Time `json:"timestamp"`
 }
 
+// BlockSyncCommitteeRewards holds all sync committee member rewards for one beacon block slot.
+type BlockSyncCommitteeRewards struct {
+	ExecutionOptimistic bool             `json:"execution_optimistic"`
+	Finalized           bool             `json:"finalized"`
+	Rewards             map[string]int64 `json:"rewards"` // validator index (decimal string) -> reward_gwei
+}
+
 // Block is one indexed canonical beacon block at slot_number (proposer CL rewards and optional EL fee fields).
 type Block struct {
-	ValidatorIndex           uint64    `json:"validator_index"`
-	ValidatorPubkey          string    `json:"validator_pubkey"`
-	SlotNumber               uint64    `json:"slot_number"`
-	BlockNumber              *uint64   `json:"block_number,omitempty"`                // Execution layer block number when available
-	Rewards                  uint64    `json:"rewards"`                               // Proposer reward total (gwei)
-	ExecutionPriorityFeesWei *string   `json:"execution_priority_fees_wei,omitempty"` // Sum of priority tips (wei), decimal string
-	ExecutionMevFeesWei      *string   `json:"execution_mev_fees_wei,omitempty"`      // Reserved; NULL in v1
-	Timestamp                time.Time `json:"timestamp"`
+	ValidatorIndex           uint64                    `json:"validator_index"`
+	ValidatorPubkey          string                    `json:"validator_pubkey"`
+	SlotNumber               uint64                    `json:"slot_number"`
+	BlockNumber              *uint64                   `json:"block_number,omitempty"`                // Execution layer block number when available
+	Rewards                  uint64                    `json:"rewards"`                               // Proposer reward total (gwei)
+	ExecutionPriorityFeesWei *string                   `json:"execution_priority_fees_wei,omitempty"` // Sum of priority tips (wei), decimal string
+	ExecutionMevFeesWei      *string                   `json:"execution_mev_fees_wei,omitempty"`      // Reserved; NULL in v1
+	SyncCommitteeRewards     *BlockSyncCommitteeRewards `json:"sync_committee_rewards,omitempty"`
+	Timestamp                time.Time                 `json:"timestamp"`
 }
 
 // SyncCommitteeReward is one row of sync committee reward for a validator at a beacon block slot.
