@@ -34,22 +34,18 @@ execution_auth_header: ""
 # -----------------------------------------------------------------------------
 # VALIDATORS
 # -----------------------------------------------------------------------------
-# List of validator indices to monitor
-# Find your validator index at: https://beaconcha.in/
-validators:
-  - 123456    # Example: Your first validator
-  - 234567    # Example: Your second validator
-  # Add more validators as needed...
-  # - 345678
-  # - 456789
+# Optional: validator indices for UI/API filtering (not used for beacon RPC).
+# Network-wide epoch indexing stores all validators; leave empty to index everyone.
+validators: []
+# validators:
+#   - 123456
 
 # -----------------------------------------------------------------------------
 # POLLING
 # -----------------------------------------------------------------------------
-# How often to poll validator status (in slots)
+# How often the realtime runner polls head (in slots). Default 32 = once per epoch.
 # 1 slot = 12 seconds on mainnet
-# Recommended: 1 for real-time, 32 for epoch-level granularity
-polling_interval_slots: 1
+polling_interval_slots: 32
 
 # -----------------------------------------------------------------------------
 # WORKER POOL
@@ -73,6 +69,7 @@ worker_pool_size: 10
 #   slots_per_pass: 8
 #   epochs_per_pass: 2
 #   poll_delay_ms: 100
+#   idle_poll_delay_ms: 12000
 
 # -----------------------------------------------------------------------------
 # RATE LIMITING

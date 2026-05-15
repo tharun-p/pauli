@@ -99,17 +99,9 @@ func (r *Runner) stepChain() []steps.Step {
 			Validators: r.validators,
 			Log:        r.log,
 		},
-		steprt.ValidatorsBalanceAtSlot{
-			Client:            r.client,
-			Repo:              r.repo,
-			Validators:        r.validators,
-			Log:               r.log,
-			LastProcessedSlot: &r.lastProcessedSlot,
-		},
 		&steprt.AttestationRewards{
 			Client:            r.client,
 			Repo:              r.repo,
-			Validators:        r.validators,
 			Log:               r.log,
 			LastProcessedSlot: &r.lastProcessedSlot,
 		},

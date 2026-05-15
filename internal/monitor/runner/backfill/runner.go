@@ -26,6 +26,13 @@ type Runner struct {
 	enqueue func(context.Context, steps.Job) error
 	idle    bool
 	env     *steps.Env
+	// oneShotBounds freezes head-lag/finalized targets at Start so one-shot does not chase a growing chain.
+	oneShotBounds *oneShotBounds
+}
+
+type oneShotBounds struct {
+	endSlot  uint64
+	endEpoch uint64
 }
 
 var _ runner.Runner = (*Runner)(nil)
@@ -67,7 +74,8 @@ func (r *Runner) Enqueue(ctx context.Context, job steps.Job) error {
 func (r *Runner) BeforeStep(ctx context.Context) error {
 	delay := r.cfg.PollDelay()
 	if r.idle {
-		r.log.Debug().Dur("poll_delay", delay).Msg("backfill idle; waiting")
+		delay = r.cfg.IdlePollDelay()
+		r.log.Debug().Dur("idle_poll_delay", delay).Msg("backfill idle; waiting")
 	}
 	select {
 	case <-ctx.Done():
@@ -209,6 +217,9 @@ func (r *Runner) oneShotComplete(ctx context.Context) (bool, error) {
 }
 
 func (r *Runner) oneShotEndSlot(ctx context.Context) uint64 {
+	if r.oneShotBounds != nil {
+		return r.oneShotBounds.endSlot
+	}
 	if r.opts.EndSlot != nil {
 		return *r.opts.EndSlot
 	}
@@ -224,16 +235,48 @@ func (r *Runner) oneShotEndSlot(ctx context.Context) uint64 {
 }
 
 func (r *Runner) oneShotEndEpoch(ctx context.Context) (uint64, error) {
+	if r.oneShotBounds != nil {
+		return r.oneShotBounds.endEpoch, nil
+	}
 	if r.opts.EndEpoch != nil {
 		return *r.opts.EndEpoch, nil
 	}
-	return r.client.FinalizedEpoch(ctx)
+	return r.epochTarget(ctx)
 }
 
 func (r *Runner) SleepOnSeedError() time.Duration { return 0 }
 
 func (r *Runner) Start(ctx context.Context) {
+	if r.opts.OneShot {
+		if err := r.freezeOneShotBounds(ctx); err != nil {
+			r.log.Error().Err(err).Msg("backfill one-shot: failed to freeze targets")
+			return
+		}
+		r.log.Info().
+			Uint64("end_slot", r.oneShotBounds.endSlot).
+			Uint64("end_epoch", r.oneShotBounds.endEpoch).
+			Msg("backfill one-shot: frozen targets")
+	}
 	runner.Run(ctx, r)
+}
+
+func (r *Runner) freezeOneShotBounds(ctx context.Context) error {
+	endSlot, err := r.slotTarget(ctx)
+	if err != nil {
+		return err
+	}
+	endEpoch, err := r.epochTarget(ctx)
+	if err != nil {
+		return err
+	}
+	if r.opts.EndSlot != nil {
+		endSlot = *r.opts.EndSlot
+	}
+	if r.opts.EndEpoch != nil {
+		endEpoch = *r.opts.EndEpoch
+	}
+	r.oneShotBounds = &oneShotBounds{endSlot: endSlot, endEpoch: endEpoch}
+	return nil
 }
 
 func (r *Runner) stepChain() []steps.Step {

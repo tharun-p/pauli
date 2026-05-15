@@ -32,156 +32,52 @@ func (r *Repository) Close() error {
 	return nil
 }
 
-// SaveValidatorSnapshot saves a validator snapshot to the database.
-func (r *Repository) SaveValidatorSnapshot(ctx context.Context, snapshot *storage.ValidatorSnapshot) error {
-	if snapshot.Timestamp.IsZero() {
-		snapshot.Timestamp = time.Now().UTC()
-	}
-
-	const query = `
-		INSERT INTO validator_snapshots (
-			validator_index, slot, status, balance, effective_balance, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (validator_index, slot) DO UPDATE SET
-			status = EXCLUDED.status,
-			balance = EXCLUDED.balance,
-			effective_balance = EXCLUDED.effective_balance,
-			timestamp = EXCLUDED.timestamp
-	`
-
-	_, err := r.client.Pool.Exec(ctx, query,
-		snapshot.ValidatorIndex,
-		snapshot.Slot,
-		snapshot.Status,
-		snapshot.Balance,
-		snapshot.EffectiveBalance,
-		snapshot.Timestamp,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to save validator snapshot (validator=%d, slot=%d): %w",
-			snapshot.ValidatorIndex, snapshot.Slot, err)
-	}
-	return nil
-}
-
-// SaveValidatorSnapshots saves multiple validator snapshots in one round trip.
-func (r *Repository) SaveValidatorSnapshots(ctx context.Context, snapshots []*storage.ValidatorSnapshot) error {
-	if len(snapshots) == 0 {
+// SaveValidatorEpochRecords upserts network-wide validator epoch rows in one batch.
+func (r *Repository) SaveValidatorEpochRecords(ctx context.Context, records []*storage.ValidatorEpochRecord) error {
+	if len(records) == 0 {
 		return nil
 	}
 	const query = `
-		INSERT INTO validator_snapshots (
-			validator_index, slot, status, balance, effective_balance, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (validator_index, slot) DO UPDATE SET
+		INSERT INTO validator_epoch_records (
+			validator_index, epoch, epoch_start_slot, status, balance, effective_balance,
+			head_reward, source_reward, target_reward, total_reward, indexed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (validator_index, epoch) DO UPDATE SET
+			epoch_start_slot = EXCLUDED.epoch_start_slot,
 			status = EXCLUDED.status,
 			balance = EXCLUDED.balance,
 			effective_balance = EXCLUDED.effective_balance,
-			timestamp = EXCLUDED.timestamp
+			head_reward = COALESCE(EXCLUDED.head_reward, validator_epoch_records.head_reward),
+			source_reward = COALESCE(EXCLUDED.source_reward, validator_epoch_records.source_reward),
+			target_reward = COALESCE(EXCLUDED.target_reward, validator_epoch_records.target_reward),
+			total_reward = COALESCE(EXCLUDED.total_reward, validator_epoch_records.total_reward),
+			indexed_at = EXCLUDED.indexed_at
 	`
 	now := time.Now().UTC()
 	batch := &pgx.Batch{}
-	for _, snapshot := range snapshots {
-		if snapshot.Timestamp.IsZero() {
-			snapshot.Timestamp = now
+	for _, rec := range records {
+		if rec.IndexedAt.IsZero() {
+			rec.IndexedAt = now
 		}
 		batch.Queue(query,
-			snapshot.ValidatorIndex,
-			snapshot.Slot,
-			snapshot.Status,
-			snapshot.Balance,
-			snapshot.EffectiveBalance,
-			snapshot.Timestamp,
+			rec.ValidatorIndex,
+			rec.Epoch,
+			rec.EpochStartSlot,
+			rec.Status,
+			rec.Balance,
+			rec.EffectiveBalance,
+			rec.HeadReward,
+			rec.SourceReward,
+			rec.TargetReward,
+			rec.TotalReward,
+			rec.IndexedAt,
 		)
 	}
 	br := r.client.Pool.SendBatch(ctx, batch)
 	defer br.Close()
-	for range snapshots {
+	for range records {
 		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("failed to save validator snapshots batch: %w", err)
-		}
-	}
-	return nil
-}
-
-// SaveAttestationDuty saves an attestation duty to the database.
-func (r *Repository) SaveAttestationDuty(ctx context.Context, duty *storage.AttestationDuty) error {
-	if duty.Timestamp.IsZero() {
-		duty.Timestamp = time.Now().UTC()
-	}
-
-	const query = `
-		INSERT INTO attestation_duties (
-			validator_index, epoch, slot, committee_index, committee_position, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (validator_index, epoch, slot) DO UPDATE SET
-			committee_index = EXCLUDED.committee_index,
-			committee_position = EXCLUDED.committee_position,
-			timestamp = EXCLUDED.timestamp
-	`
-
-	_, err := r.client.Pool.Exec(ctx, query,
-		duty.ValidatorIndex,
-		duty.Epoch,
-		duty.Slot,
-		duty.CommitteeIndex,
-		duty.CommitteePosition,
-		duty.Timestamp,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to save attestation duty: %w", err)
-	}
-	return nil
-}
-
-// SaveAttestationDuties saves multiple attestation duties.
-func (r *Repository) SaveAttestationDuties(ctx context.Context, duties []*storage.AttestationDuty) error {
-	for _, duty := range duties {
-		if err := r.SaveAttestationDuty(ctx, duty); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// SaveAttestationReward saves an attestation reward to the database.
-func (r *Repository) SaveAttestationReward(ctx context.Context, reward *storage.AttestationReward) error {
-	if reward.Timestamp.IsZero() {
-		reward.Timestamp = time.Now().UTC()
-	}
-
-	const query = `
-		INSERT INTO attestation_rewards (
-			validator_index, epoch, head_reward, source_reward, target_reward, total_reward, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (validator_index, epoch) DO UPDATE SET
-			head_reward = EXCLUDED.head_reward,
-			source_reward = EXCLUDED.source_reward,
-			target_reward = EXCLUDED.target_reward,
-			total_reward = EXCLUDED.total_reward,
-			timestamp = EXCLUDED.timestamp
-	`
-
-	_, err := r.client.Pool.Exec(ctx, query,
-		reward.ValidatorIndex,
-		reward.Epoch,
-		reward.HeadReward,
-		reward.SourceReward,
-		reward.TargetReward,
-		reward.TotalReward,
-		reward.Timestamp,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to save attestation reward: %w", err)
-	}
-	return nil
-}
-
-// SaveAttestationRewards saves multiple attestation rewards.
-func (r *Repository) SaveAttestationRewards(ctx context.Context, rewards []*storage.AttestationReward) error {
-	for _, reward := range rewards {
-		if err := r.SaveAttestationReward(ctx, reward); err != nil {
-			return err
+			return fmt.Errorf("failed to save validator epoch records batch: %w", err)
 		}
 	}
 	return nil
@@ -257,13 +153,13 @@ func (r *Repository) SaveBlocks(ctx context.Context, rows []*storage.Block) erro
 	return nil
 }
 
-// GetValidatorSnapshots retrieves validator snapshots for a given validator within a slot range.
+// GetValidatorSnapshots retrieves epoch balance snapshots for a validator (slot = epoch_start_slot).
 func (r *Repository) GetValidatorSnapshots(ctx context.Context, validatorIndex uint64, fromSlot, toSlot uint64) ([]*storage.ValidatorSnapshot, error) {
 	const query = `
-		SELECT validator_index, slot, status, balance, effective_balance, timestamp
-		FROM validator_snapshots
-		WHERE validator_index = $1 AND slot >= $2 AND slot <= $3
-		ORDER BY slot DESC
+		SELECT validator_index, epoch_start_slot, status, balance, effective_balance, indexed_at
+		FROM validator_epoch_records
+		WHERE validator_index = $1 AND epoch_start_slot >= $2 AND epoch_start_slot <= $3
+		ORDER BY epoch_start_slot DESC
 	`
 
 	rows, err := r.client.Pool.Query(ctx, query, validatorIndex, fromSlot, toSlot)
@@ -295,13 +191,13 @@ func (r *Repository) GetValidatorSnapshots(ctx context.Context, validatorIndex u
 	return snapshots, nil
 }
 
-// ListValidatorSnapshots returns snapshots for a validator in a slot range with pagination (newest slots first).
+// ListValidatorSnapshots returns epoch balance snapshots for a validator in a slot range (epoch start slots).
 func (r *Repository) ListValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64, limit, offset int) ([]*storage.ValidatorSnapshot, error) {
 	const query = `
-		SELECT validator_index, slot, status, balance, effective_balance, timestamp
-		FROM validator_snapshots
-		WHERE validator_index = $1 AND slot >= $2 AND slot <= $3
-		ORDER BY slot DESC
+		SELECT validator_index, epoch_start_slot, status, balance, effective_balance, indexed_at
+		FROM validator_epoch_records
+		WHERE validator_index = $1 AND epoch_start_slot >= $2 AND epoch_start_slot <= $3
+		ORDER BY epoch_start_slot DESC
 		LIMIT $4 OFFSET $5
 	`
 
@@ -336,9 +232,9 @@ func (r *Repository) ListValidatorSnapshots(ctx context.Context, validatorIndex,
 // GetAttestationRewards retrieves attestation rewards for a validator within an epoch range.
 func (r *Repository) GetAttestationRewards(ctx context.Context, validatorIndex uint64, fromEpoch, toEpoch uint64) ([]*storage.AttestationReward, error) {
 	const query = `
-		SELECT validator_index, epoch, head_reward, source_reward, target_reward, total_reward, timestamp
-		FROM attestation_rewards
-		WHERE validator_index = $1 AND epoch >= $2 AND epoch <= $3
+		SELECT validator_index, epoch, head_reward, source_reward, target_reward, total_reward, indexed_at
+		FROM validator_epoch_records
+		WHERE validator_index = $1 AND epoch >= $2 AND epoch <= $3 AND head_reward IS NOT NULL
 		ORDER BY epoch DESC
 	`
 
@@ -376,9 +272,9 @@ func (r *Repository) GetAttestationRewards(ctx context.Context, validatorIndex u
 func (r *Repository) ListAttestationRewards(ctx context.Context, validatorIndex *uint64, fromEpoch, toEpoch uint64, limit, offset int) ([]*storage.AttestationReward, error) {
 	var sb strings.Builder
 	sb.WriteString(`
-		SELECT validator_index, epoch, head_reward, source_reward, target_reward, total_reward, timestamp
-		FROM attestation_rewards
-		WHERE epoch >= $1 AND epoch <= $2`)
+		SELECT validator_index, epoch, head_reward, source_reward, target_reward, total_reward, indexed_at
+		FROM validator_epoch_records
+		WHERE epoch >= $1 AND epoch <= $2 AND head_reward IS NOT NULL`)
 	args := []any{fromEpoch, toEpoch}
 	argPos := 3
 	if validatorIndex != nil {
@@ -578,11 +474,11 @@ func scanSyncCommitteeRewardRows(rows pgx.Rows, validatorIndex uint64) ([]*stora
 	return out, nil
 }
 
-// ListValidators returns distinct validator indices that have snapshots, ordered ascending.
+// ListValidators returns distinct validator indices that have epoch records, ordered ascending.
 func (r *Repository) ListValidators(ctx context.Context, limit, offset int) ([]uint64, error) {
 	const query = `
 		SELECT DISTINCT validator_index
-		FROM validator_snapshots
+		FROM validator_epoch_records
 		ORDER BY validator_index ASC
 		LIMIT $1 OFFSET $2
 	`
@@ -606,13 +502,13 @@ func (r *Repository) ListValidators(ctx context.Context, limit, offset int) ([]u
 	return indices, nil
 }
 
-// GetLatestSnapshot retrieves the most recent snapshot for a validator.
+// GetLatestSnapshot retrieves the most recent epoch balance snapshot for a validator.
 func (r *Repository) GetLatestSnapshot(ctx context.Context, validatorIndex uint64) (*storage.ValidatorSnapshot, error) {
 	const query = `
-		SELECT validator_index, slot, status, balance, effective_balance, timestamp
-		FROM validator_snapshots
+		SELECT validator_index, epoch_start_slot, status, balance, effective_balance, indexed_at
+		FROM validator_epoch_records
 		WHERE validator_index = $1
-		ORDER BY slot DESC
+		ORDER BY epoch DESC
 		LIMIT 1
 	`
 
@@ -630,9 +526,9 @@ func (r *Repository) GetLatestSnapshot(ctx context.Context, validatorIndex uint6
 	return &snapshot, nil
 }
 
-// CountSnapshots returns the total number of snapshots for a validator.
+// CountSnapshots returns the total number of epoch records for a validator.
 func (r *Repository) CountSnapshots(ctx context.Context, validatorIndex uint64) (int, error) {
-	const query = `SELECT COUNT(*) FROM validator_snapshots WHERE validator_index = $1`
+	const query = `SELECT COUNT(*) FROM validator_epoch_records WHERE validator_index = $1`
 
 	var count int
 	if err := r.client.Pool.QueryRow(ctx, query, validatorIndex).Scan(&count); err != nil {

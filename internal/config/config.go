@@ -45,15 +45,24 @@ type BackfillConf struct {
 	LagBehindHead uint64  `yaml:"lag_behind_head"`
 	SlotsPerPass  int     `yaml:"slots_per_pass"`
 	EpochsPerPass int     `yaml:"epochs_per_pass"`
-	PollDelayMs   int     `yaml:"poll_delay_ms"`
+	PollDelayMs      int `yaml:"poll_delay_ms"`
+	IdlePollDelayMs  int `yaml:"idle_poll_delay_ms"`
 }
 
-// PollDelay returns pacing between backfill passes when idle or between iterations.
+// PollDelay returns pacing between backfill passes while catching up.
 func (b *BackfillConf) PollDelay() time.Duration {
 	if b.PollDelayMs <= 0 {
 		return 100 * time.Millisecond
 	}
 	return time.Duration(b.PollDelayMs) * time.Millisecond
+}
+
+// IdlePollDelay returns pacing between backfill passes when fully caught up.
+func (b *BackfillConf) IdlePollDelay() time.Duration {
+	if b.IdlePollDelayMs <= 0 {
+		return 12 * time.Second
+	}
+	return time.Duration(b.IdlePollDelayMs) * time.Millisecond
 }
 
 // RateLimitConf configures the rate limiter.
@@ -161,9 +170,7 @@ func (c *Config) validate() error {
 	if c.BeaconNodeURL == "" {
 		return fmt.Errorf("beacon_node_url is required")
 	}
-	if len(c.Validators) == 0 {
-		return fmt.Errorf("at least one validator index is required")
-	}
+	// validators is optional: network-wide epoch indexing does not use it for RPC.
 	switch c.DatabaseDriver {
 	case "", "postgres":
 		if err := validatePostgres(&c.Postgres); err != nil {
@@ -180,7 +187,7 @@ func (c *Config) validate() error {
 // setDefaults sets default values for optional fields.
 func (c *Config) setDefaults() {
 	if c.PollingIntervalSlots <= 0 {
-		c.PollingIntervalSlots = 1
+		c.PollingIntervalSlots = 32
 	}
 	if c.WorkerPoolSize <= 0 {
 		c.WorkerPoolSize = 10
@@ -219,5 +226,8 @@ func (b *BackfillConf) setDefaults() {
 	}
 	if b.PollDelayMs <= 0 {
 		b.PollDelayMs = 100
+	}
+	if b.IdlePollDelayMs <= 0 {
+		b.IdlePollDelayMs = 12000
 	}
 }

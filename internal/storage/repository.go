@@ -4,12 +4,7 @@ import "context"
 
 // Repository defines the data access methods for validator data.
 type Repository interface {
-	SaveValidatorSnapshot(ctx context.Context, snapshot *ValidatorSnapshot) error
-	SaveValidatorSnapshots(ctx context.Context, snapshots []*ValidatorSnapshot) error
-	SaveAttestationDuty(ctx context.Context, duty *AttestationDuty) error
-	SaveAttestationDuties(ctx context.Context, duties []*AttestationDuty) error
-	SaveAttestationReward(ctx context.Context, reward *AttestationReward) error
-	SaveAttestationRewards(ctx context.Context, rewards []*AttestationReward) error
+	SaveValidatorEpochRecords(ctx context.Context, records []*ValidatorEpochRecord) error
 	SaveBlock(ctx context.Context, row *Block) error
 	SaveBlocks(ctx context.Context, rows []*Block) error
 	GetValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64) ([]*ValidatorSnapshot, error)
