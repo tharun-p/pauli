@@ -48,7 +48,7 @@ flowchart LR
   H --> B
 ```
 
-**In one sentence:** `runner/realtime.Runner` wires wait + **`steps/realtime`** step chain — **RealtimeEnvBootstrap** (head + validators on **`Env`**); then **ValidatorsBalanceAtSlot**, **AttestationRewards** (async when each step’s **`Run`** enqueues), then **RecordLastProcessedSlot** (sync: commits **`lastProcessedSlot`** for head dedup on the next poll).
+**In one sentence:** `runner/realtime.Runner` wires wait + **`steps/realtime`** step chain — **RealtimeEnvBootstrap** (head + validators on **`Env`**); then **AttestationRewards** and **BlockIndexer** (async when each step’s **`Run`** enqueues), then **RecordLastProcessedSlot** (sync: commits **`lastProcessedSlot`** for head dedup on the next poll).
 
 ## Module and package call graph
 
@@ -85,7 +85,7 @@ flowchart LR
 
 1. `runner/realtime.Runner.Start(ctx)` calls `runner.Run(ctx, m)` until `ctx` is done.
 2. `BeforeStep`: `BlockchainNetwork.WaitPollInterval`.
-3. `StepChain`: **`steps/realtime`** — **RealtimeEnvBootstrap** (sync), **ValidatorsBalanceAtSlot**, **AttestationRewards** (async; may enqueue), **RecordLastProcessedSlot** (sync).
+3. `StepChain`: **`steps/realtime`** — **RealtimeEnvBootstrap** (sync), **AttestationRewards** and **BlockIndexer** (async; may enqueue), **RecordLastProcessedSlot** (sync).
 4. `runner.Run`: `m.Env()` then `Reset(ctx)`, then each `steps.Step.Run(env)`; if **`Async()`** and **`Run` returns `enqueue=true`**, it **`m.Enqueue` / `pool.Enqueue`** a **`steps.Job{Step, Env.Clone()}`**.
 
 ## Execution path

@@ -97,11 +97,7 @@ Endpoints:
 
 ## Indexed Data
 
-Pauli currently stores three validator-focused datasets:
-
-- `validator_snapshots`: status, balance, effective balance per slot
-- `attestation_duties`: duty assignment data per epoch/slot
-- `attestation_rewards`: head/source/target rewards per epoch (negative `total_reward` reflects penalties)
+Pauli currently stores validator-focused epoch data in `validator_epoch_records` (status, balance, effective balance, and attestation rewards per epoch).
 
 ## How Indexing Is Scheduled
 
@@ -122,7 +118,7 @@ See **`doc/monitor-e2e-flow.md`** for diagrams.
 
 After **`BeforeStep`** (`BlockchainNetwork.WaitPollInterval`), one iteration does:
 
-1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **ValidatorsBalanceAtSlot** → **AttestationRewards** → **BlockIndexer** → **RecordLastProcessedSlot**.
+1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **AttestationRewards** → **BlockIndexer** → **RecordLastProcessedSlot**.
 2. **`Env().Reset(ctx)`** clears per-iteration shared state, then each step’s **`Run(env)`** runs on the **runner goroutine**.
 
 So **`polling_interval_slots`** controls **how often** that full chain runs, not “only when slot mod N == 0.”
@@ -131,15 +127,14 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 
 - **Sync** (**RealtimeEnvBootstrap**): **`Run`** only fetches **head slot** and copies configured validators into **`Env`**.
 - **Sync** (**RecordLastProcessedSlot**): runs **last**; after the rest of the chain ran without error, stores **`lastProcessedSlot`** on the runner so the next poll can **skip** when **`HeadSlot`** is unchanged.
-- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; otherwise **`ValidatorsBalanceAtSlot`** always enqueues, while **AttestationRewards** enqueues only at **epoch boundaries**, and **BlockIndexer** enqueues on every new head. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`). **BlockIndexer** calls the beacon block rewards API, sync committee rewards API (all members via empty POST body), and the execution client for priority fees when `execution_node_url` is set **for every new head**, not only for configured validators—budget RPC capacity accordingly.
+- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; **AttestationRewards** enqueues only at **epoch boundaries** (network-wide epoch index), and **BlockIndexer** enqueues on every new head. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`). **BlockIndexer** calls the beacon block rewards API, sync committee rewards API (all members via empty POST body), and the execution client for priority fees when `execution_node_url` is set **for every new head**—budget RPC capacity accordingly.
 
 ### What each step does (current behavior)
 
 | Step | Runner vs worker | Role |
 |------|------------------|------|
-| **RealtimeEnvBootstrap** | Runner (`Run` only) | Head slot and validator list on **`Env`** |
-| **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Skips if head already recorded; batched validator state at **`Env.HeadSlot`** → snapshots |
-| **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary with a prior epoch, attestation rewards |
+| **RealtimeEnvBootstrap** | Runner (`Run` only) | Head slot and optional validator list on **`Env`** |
+| **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary indexes **all validators** (1 GET + 1 POST per epoch) into **`validator_epoch_records`** |
 | **BlockIndexer** | Worker (`RunAsync`) | Skips if head already recorded; indexes the canonical head block (proposer, CL rewards, all sync committee rewards as JSONB on **`blocks`**, optional EL priority fees) |
 | **RecordLastProcessedSlot** | Runner (`Run` only) | Sets runner **`lastProcessedSlot`** to **`Env.HeadSlot`** after a successful chain pass |
 
@@ -150,7 +145,9 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 | Track | Steps | Progress |
 |-------|-------|----------|
 | **Slots** | **SlotPass** → shared block indexer (`steps/indexing`) | `indexer_progress` kind `slot` (includes empty slots) |
-| **Epochs** | **EpochPass** → all-validator balances + attestation rewards | `indexer_progress` kind `epoch` |
+| **Epochs** | **EpochPass** → network-wide epoch records (balances + attestation rewards, one table) | `indexer_progress` kind `epoch` |
+
+When backfill is caught up, **`idle_poll_delay_ms`** (default 12s) reduces idle beacon polling.
 
 Tune **`slots_per_pass`**, **`epochs_per_pass`**, and **`worker_pool_size`** so backfill does not starve realtime RPC.
 

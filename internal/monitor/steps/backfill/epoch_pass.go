@@ -92,8 +92,12 @@ func (s *EpochPass) Run(e *steps.Env) (bool, error) {
 		if err := indexing.IndexEpochAtBoundary(ctx, idx, epoch); err != nil {
 			return false, err
 		}
-		if err := s.Repo.MarkEpochIndexed(ctx, epoch); err != nil {
+		done, err = s.Repo.IsEpochIndexed(ctx, epoch)
+		if err != nil {
 			return false, err
+		}
+		if !done {
+			continue
 		}
 		processed++
 	}

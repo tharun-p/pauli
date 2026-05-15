@@ -2,7 +2,22 @@ package storage
 
 import "time"
 
-// ValidatorSnapshot represents a point-in-time snapshot of a validator's state.
+// ValidatorEpochRecord is the canonical per-validator epoch row (balance + optional attestation rewards).
+type ValidatorEpochRecord struct {
+	ValidatorIndex   uint64    `json:"validator_index"`
+	Epoch            uint64    `json:"epoch"`
+	EpochStartSlot   uint64    `json:"epoch_start_slot"`
+	Status           string    `json:"status"`
+	Balance          uint64    `json:"balance"`
+	EffectiveBalance uint64    `json:"effective_balance"`
+	HeadReward       *int64    `json:"head_reward,omitempty"`
+	SourceReward     *int64    `json:"source_reward,omitempty"`
+	TargetReward     *int64    `json:"target_reward,omitempty"`
+	TotalReward      *int64    `json:"total_reward,omitempty"`
+	IndexedAt        time.Time `json:"indexed_at"`
+}
+
+// ValidatorSnapshot is the API view of epoch balance state (slot = epoch start slot).
 type ValidatorSnapshot struct {
 	ValidatorIndex   uint64    `json:"validator_index"`
 	Slot             uint64    `json:"slot"`
@@ -10,16 +25,6 @@ type ValidatorSnapshot struct {
 	Balance          uint64    `json:"balance"`           // Actual balance in Gwei
 	EffectiveBalance uint64    `json:"effective_balance"` // Effective balance in Gwei (MaxEB aware, up to 2048 ETH)
 	Timestamp        time.Time `json:"timestamp"`
-}
-
-// AttestationDuty represents a validator's attestation duty assignment.
-type AttestationDuty struct {
-	ValidatorIndex    uint64    `json:"validator_index"`
-	Epoch             uint64    `json:"epoch"`
-	Slot              uint64    `json:"slot"`
-	CommitteeIndex    int       `json:"committee_index"`
-	CommitteePosition int       `json:"committee_position"`
-	Timestamp         time.Time `json:"timestamp"`
 }
 
 // AttestationReward represents a validator's attestation rewards for an epoch.

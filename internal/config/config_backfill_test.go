@@ -17,6 +17,16 @@ func TestBackfillConf_setDefaults(t *testing.T) {
 	if b.PollDelayMs != 100 {
 		t.Fatalf("PollDelayMs = %d, want 100", b.PollDelayMs)
 	}
+	if b.IdlePollDelayMs != 12000 {
+		t.Fatalf("IdlePollDelayMs = %d, want 12000", b.IdlePollDelayMs)
+	}
+}
+
+func TestBackfillConf_IdlePollDelay(t *testing.T) {
+	b := BackfillConf{IdlePollDelayMs: 5000}
+	if d := b.IdlePollDelay(); d.Milliseconds() != 5000 {
+		t.Fatalf("IdlePollDelay = %v, want 5s", d)
+	}
 }
 
 func TestBackfillConf_PollDelay(t *testing.T) {
