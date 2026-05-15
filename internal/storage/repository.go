@@ -12,8 +12,6 @@ type Repository interface {
 	SaveAttestationRewards(ctx context.Context, rewards []*AttestationReward) error
 	SaveBlock(ctx context.Context, row *Block) error
 	SaveBlocks(ctx context.Context, rows []*Block) error
-	SaveSyncCommitteeReward(ctx context.Context, row *SyncCommitteeReward) error
-	SaveSyncCommitteeRewards(ctx context.Context, rows []*SyncCommitteeReward) error
 	SaveValidatorPenalty(ctx context.Context, penalty *ValidatorPenalty) error
 	GetValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64) ([]*ValidatorSnapshot, error)
 	ListValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64, limit, offset int) ([]*ValidatorSnapshot, error)

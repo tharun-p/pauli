@@ -14,7 +14,8 @@ import (
 )
 
 // BlockIndexer (async): for each new canonical head slot, fetches proposer metadata, CL block rewards,
-// and optional EL priority fees, then upserts one row per slot (network-wide; not scoped to watched validators).
+// sync committee rewards for all members, and optional EL priority fees, then upserts one row per slot
+// (network-wide; not scoped to watched validators).
 // Skips when HeadSlot matches LastProcessedSlot (same dedupe contract as other realtime steps).
 type BlockIndexer struct {
 	Client            *beacon.Client
@@ -98,14 +99,31 @@ func (s *BlockIndexer) RunAsync(ctx context.Context, e *steps.Env) error {
 		}
 	}
 
+	syncResult, err := s.Client.GetSyncCommitteeRewards(ctx, blockID, nil)
+	if err != nil {
+		if rewardsStateNotYetAvailable(err) {
+			s.Log.Warn().Err(err).Uint64("slot", e.HeadSlot).
+				Msg("sync committee rewards not available yet; saving block without sync rewards")
+		} else {
+			return fmt.Errorf("get sync committee rewards: %w", err)
+		}
+	} else {
+		row.SyncCommitteeRewards = blockSyncCommitteeRewardsFromBeacon(syncResult)
+	}
+
 	if err := s.Repo.SaveBlock(ctx, row); err != nil {
 		return fmt.Errorf("save block: %w", err)
 	}
 
+	syncCount := 0
+	if row.SyncCommitteeRewards != nil {
+		syncCount = len(row.SyncCommitteeRewards.Rewards)
+	}
 	s.Log.Debug().
 		Uint64("slot", e.HeadSlot).
 		Uint64("validator_index", proposerIndex).
 		Uint64("rewards_gwei", row.Rewards).
+		Int("sync_committee_rewards", syncCount).
 		Msg("saved indexed block")
 
 	return nil

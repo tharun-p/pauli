@@ -3,7 +3,9 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -194,14 +196,15 @@ func (r *Repository) SaveBlock(ctx context.Context, row *storage.Block) error {
 	const query = `
 		INSERT INTO blocks (
 			validator_index, validator_pubkey, slot_number, block_number, rewards,
-			execution_priority_fees_wei, execution_mev_fees_wei, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			execution_priority_fees_wei, execution_mev_fees_wei, sync_committee_rewards, timestamp
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (validator_index, slot_number) DO UPDATE SET
 			validator_pubkey = EXCLUDED.validator_pubkey,
 			block_number = EXCLUDED.block_number,
 			rewards = EXCLUDED.rewards,
 			execution_priority_fees_wei = EXCLUDED.execution_priority_fees_wei,
 			execution_mev_fees_wei = EXCLUDED.execution_mev_fees_wei,
+			sync_committee_rewards = COALESCE(EXCLUDED.sync_committee_rewards, blocks.sync_committee_rewards),
 			timestamp = EXCLUDED.timestamp
 	`
 
@@ -218,6 +221,15 @@ func (r *Repository) SaveBlock(ctx context.Context, row *storage.Block) error {
 		mevWei = *row.ExecutionMevFeesWei
 	}
 
+	var syncRewards interface{}
+	if row.SyncCommitteeRewards != nil {
+		b, err := json.Marshal(row.SyncCommitteeRewards)
+		if err != nil {
+			return fmt.Errorf("marshal sync committee rewards: %w", err)
+		}
+		syncRewards = b
+	}
+
 	_, err := r.client.Pool.Exec(ctx, query,
 		row.ValidatorIndex,
 		row.ValidatorPubkey,
@@ -226,6 +238,7 @@ func (r *Repository) SaveBlock(ctx context.Context, row *storage.Block) error {
 		row.Rewards,
 		priWei,
 		mevWei,
+		syncRewards,
 		row.Timestamp,
 	)
 	if err != nil {
@@ -238,47 +251,6 @@ func (r *Repository) SaveBlock(ctx context.Context, row *storage.Block) error {
 func (r *Repository) SaveBlocks(ctx context.Context, rows []*storage.Block) error {
 	for _, row := range rows {
 		if err := r.SaveBlock(ctx, row); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// SaveSyncCommitteeReward upserts a sync committee reward row.
-func (r *Repository) SaveSyncCommitteeReward(ctx context.Context, row *storage.SyncCommitteeReward) error {
-	if row.Timestamp.IsZero() {
-		row.Timestamp = time.Now().UTC()
-	}
-
-	const query = `
-		INSERT INTO sync_committee_rewards (
-			validator_index, slot, reward_gwei, execution_optimistic, finalized, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (validator_index, slot) DO UPDATE SET
-			reward_gwei = EXCLUDED.reward_gwei,
-			execution_optimistic = EXCLUDED.execution_optimistic,
-			finalized = EXCLUDED.finalized,
-			timestamp = EXCLUDED.timestamp
-	`
-
-	_, err := r.client.Pool.Exec(ctx, query,
-		row.ValidatorIndex,
-		row.Slot,
-		row.RewardGwei,
-		row.ExecutionOptimistic,
-		row.Finalized,
-		row.Timestamp,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to save sync committee reward: %w", err)
-	}
-	return nil
-}
-
-// SaveSyncCommitteeRewards saves multiple sync committee reward rows.
-func (r *Repository) SaveSyncCommitteeRewards(ctx context.Context, rows []*storage.SyncCommitteeReward) error {
-	for _, row := range rows {
-		if err := r.SaveSyncCommitteeReward(ctx, row); err != nil {
 			return err
 		}
 	}
@@ -540,22 +512,52 @@ func (r *Repository) ListBlocks(ctx context.Context, validatorIndex *uint64, fro
 
 // ListSyncCommitteeRewards returns sync committee rewards for a slot range, optionally filtered to one validator.
 func (r *Repository) ListSyncCommitteeRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*storage.SyncCommitteeReward, error) {
-	var sb strings.Builder
-	sb.WriteString(`
-		SELECT validator_index, slot, reward_gwei, execution_optimistic, finalized, timestamp
-		FROM sync_committee_rewards
-		WHERE slot >= $1 AND slot <= $2`)
-	args := []any{fromSlot, toSlot}
-	argPos := 3
 	if validatorIndex != nil {
-		fmt.Fprintf(&sb, " AND validator_index = $%d", argPos)
-		args = append(args, *validatorIndex)
-		argPos++
+		return r.listSyncCommitteeRewardsScoped(ctx, *validatorIndex, fromSlot, toSlot, limit, offset)
 	}
-	fmt.Fprintf(&sb, " ORDER BY slot DESC, validator_index ASC LIMIT $%d OFFSET $%d", argPos, argPos+1)
-	args = append(args, limit, offset)
+	return r.listSyncCommitteeRewardsGlobal(ctx, fromSlot, toSlot, limit, offset)
+}
 
-	rows, err := r.client.Pool.Query(ctx, sb.String(), args...)
+func (r *Repository) listSyncCommitteeRewardsScoped(ctx context.Context, validatorIndex, fromSlot, toSlot uint64, limit, offset int) ([]*storage.SyncCommitteeReward, error) {
+	idxKey := strconv.FormatUint(validatorIndex, 10)
+	const query = `
+		SELECT slot_number,
+			(sync_committee_rewards->'rewards'->>$3)::bigint,
+			(sync_committee_rewards->>'execution_optimistic')::boolean,
+			(sync_committee_rewards->>'finalized')::boolean,
+			timestamp
+		FROM blocks
+		WHERE slot_number >= $1 AND slot_number <= $2
+			AND sync_committee_rewards IS NOT NULL
+			AND sync_committee_rewards->'rewards' ? $3
+		ORDER BY slot_number DESC
+		LIMIT $4 OFFSET $5`
+
+	rows, err := r.client.Pool.Query(ctx, query, fromSlot, toSlot, idxKey, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sync committee rewards: %w", err)
+	}
+	defer rows.Close()
+
+	return scanSyncCommitteeRewardRows(rows, validatorIndex)
+}
+
+func (r *Repository) listSyncCommitteeRewardsGlobal(ctx context.Context, fromSlot, toSlot uint64, limit, offset int) ([]*storage.SyncCommitteeReward, error) {
+	const query = `
+		SELECT b.slot_number,
+			t.key::bigint,
+			t.value::bigint,
+			(b.sync_committee_rewards->>'execution_optimistic')::boolean,
+			(b.sync_committee_rewards->>'finalized')::boolean,
+			b.timestamp
+		FROM blocks b,
+		LATERAL jsonb_each_text(b.sync_committee_rewards->'rewards') AS t(key, value)
+		WHERE b.slot_number >= $1 AND b.slot_number <= $2
+			AND b.sync_committee_rewards IS NOT NULL
+		ORDER BY b.slot_number DESC, t.key::bigint ASC
+		LIMIT $3 OFFSET $4`
+
+	rows, err := r.client.Pool.Query(ctx, query, fromSlot, toSlot, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sync committee rewards: %w", err)
 	}
@@ -565,7 +567,30 @@ func (r *Repository) ListSyncCommitteeRewards(ctx context.Context, validatorInde
 	for rows.Next() {
 		var row storage.SyncCommitteeReward
 		if err := rows.Scan(
+			&row.Slot,
 			&row.ValidatorIndex,
+			&row.RewardGwei,
+			&row.ExecutionOptimistic,
+			&row.Finalized,
+			&row.Timestamp,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan sync committee reward: %w", err)
+		}
+		cp := row
+		out = append(out, &cp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate sync committee rewards: %w", err)
+	}
+	return out, nil
+}
+
+func scanSyncCommitteeRewardRows(rows pgx.Rows, validatorIndex uint64) ([]*storage.SyncCommitteeReward, error) {
+	var out []*storage.SyncCommitteeReward
+	for rows.Next() {
+		var row storage.SyncCommitteeReward
+		row.ValidatorIndex = validatorIndex
+		if err := rows.Scan(
 			&row.Slot,
 			&row.RewardGwei,
 			&row.ExecutionOptimistic,

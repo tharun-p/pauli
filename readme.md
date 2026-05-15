@@ -118,7 +118,7 @@ Indexing is driven by a **realtime runner loop** (`internal/monitor/runner` + `r
 
 After **`BeforeStep`** (`BlockchainNetwork.WaitPollInterval`), one iteration does:
 
-1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **ValidatorsBalanceAtSlot** → **AttestationRewards** → **BlockIndexer** → **SyncCommitteeRewards** → **RecordLastProcessedSlot**.
+1. **`StepChain`** returns the same ordered steps every time: **RealtimeEnvBootstrap** → **ValidatorsBalanceAtSlot** → **AttestationRewards** → **BlockIndexer** → **RecordLastProcessedSlot**.
 2. **`Env().Reset(ctx)`** clears per-iteration shared state, then each step’s **`Run(env)`** runs on the **runner goroutine**.
 
 So **`polling_interval_slots`** controls **how often** that full chain runs, not “only when slot mod N == 0.”
@@ -127,7 +127,7 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 
 - **Sync** (**RealtimeEnvBootstrap**): **`Run`** only fetches **head slot** and copies configured validators into **`Env`**.
 - **Sync** (**RecordLastProcessedSlot**): runs **last**; after the rest of the chain ran without error, stores **`lastProcessedSlot`** on the runner so the next poll can **skip** when **`HeadSlot`** is unchanged.
-- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; otherwise **`ValidatorsBalanceAtSlot`** always enqueues, while **AttestationRewards** enqueues only at **epoch boundaries**, and **BlockIndexer** / **SyncCommitteeRewards** enqueue on every new head. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`). **BlockIndexer** calls the beacon block rewards API (and the execution client for priority fees when `execution_node_url` is set) **for every new head**, not only for configured validators—budget RPC capacity accordingly.
+- **Async** steps: each **`Run`** skips when **`HeadSlot == lastProcessedSlot`**; otherwise **`ValidatorsBalanceAtSlot`** always enqueues, while **AttestationRewards** enqueues only at **epoch boundaries**, and **BlockIndexer** enqueues on every new head. Workers call **`Step.RunAsync`**. Heavy I/O runs on the **worker pool** (`worker_pool_size`). **BlockIndexer** calls the beacon block rewards API, sync committee rewards API (all members via empty POST body), and the execution client for priority fees when `execution_node_url` is set **for every new head**, not only for configured validators—budget RPC capacity accordingly.
 
 ### What each step does (current behavior)
 
@@ -136,8 +136,7 @@ So **`polling_interval_slots`** controls **how often** that full chain runs, not
 | **RealtimeEnvBootstrap** | Runner (`Run` only) | Head slot and validator list on **`Env`** |
 | **ValidatorsBalanceAtSlot** | Worker (`RunAsync`) | Skips if head already recorded; batched validator state at **`Env.HeadSlot`** → snapshots |
 | **AttestationRewards** | Worker (`RunAsync`) | Skips if head already recorded; at epoch boundary with a prior epoch, rewards (and derived penalties) |
-| **BlockIndexer** | Worker (`RunAsync`) | Skips if head already recorded; indexes the canonical head block (proposer, CL rewards, optional EL priority fees) into **`blocks`** |
-| **SyncCommitteeRewards** | Worker (`RunAsync`) | Skips if head already recorded; sync committee reward rows for watched validators when applicable |
+| **BlockIndexer** | Worker (`RunAsync`) | Skips if head already recorded; indexes the canonical head block (proposer, CL rewards, all sync committee rewards as JSONB on **`blocks`**, optional EL priority fees) |
 | **RecordLastProcessedSlot** | Runner (`Run` only) | Sets runner **`lastProcessedSlot`** to **`Env.HeadSlot`** after a successful chain pass |
 
 **Penalties** are still written from reward processing when net reward is negative; there is no separate penalty scheduler.
