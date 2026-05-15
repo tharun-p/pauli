@@ -12,7 +12,6 @@ type Repository interface {
 	SaveAttestationRewards(ctx context.Context, rewards []*AttestationReward) error
 	SaveBlock(ctx context.Context, row *Block) error
 	SaveBlocks(ctx context.Context, rows []*Block) error
-	SaveValidatorPenalty(ctx context.Context, penalty *ValidatorPenalty) error
 	GetValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64) ([]*ValidatorSnapshot, error)
 	ListValidatorSnapshots(ctx context.Context, validatorIndex, fromSlot, toSlot uint64, limit, offset int) ([]*ValidatorSnapshot, error)
 	GetAttestationRewards(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64) ([]*AttestationReward, error)
@@ -20,10 +19,19 @@ type Repository interface {
 	ListAttestationRewards(ctx context.Context, validatorIndex *uint64, fromEpoch, toEpoch uint64, limit, offset int) ([]*AttestationReward, error)
 	ListBlocks(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*Block, error)
 	ListSyncCommitteeRewards(ctx context.Context, validatorIndex *uint64, fromSlot, toSlot uint64, limit, offset int) ([]*SyncCommitteeReward, error)
-	GetValidatorPenalties(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64, limit, offset int) ([]*ValidatorPenalty, error)
 	ListValidators(ctx context.Context, limit, offset int) ([]uint64, error)
 	GetLatestSnapshot(ctx context.Context, validatorIndex uint64) (*ValidatorSnapshot, error)
 	CountSnapshots(ctx context.Context, validatorIndex uint64) (int, error)
+
+	MarkSlotIndexed(ctx context.Context, slot uint64) error
+	MarkEpochIndexed(ctx context.Context, epoch uint64) error
+	MaxIndexedSlot(ctx context.Context) (slot uint64, ok bool, err error)
+	MaxIndexedEpoch(ctx context.Context) (epoch uint64, ok bool, err error)
+	FirstUnindexedSlot(ctx context.Context, from, to uint64) (slot uint64, ok bool, err error)
+	FirstUnindexedEpoch(ctx context.Context, from, to uint64) (epoch uint64, ok bool, err error)
+	IsSlotIndexed(ctx context.Context, slot uint64) (bool, error)
+	IsEpochIndexed(ctx context.Context, epoch uint64) (bool, error)
+
 	Close() error
 }
 

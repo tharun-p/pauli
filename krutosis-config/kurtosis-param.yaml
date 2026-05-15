@@ -1,16 +1,45 @@
+# Pauli devnet — archive / historic node (for backfill + old beacon states).
+# Geth: archive EL. Lighthouse: --reconstruct-historic-states (keeps historic beacon states).
+# Sync is from genesis (checkpoint sync off). Volumes are in MB; raise if the enclave runs long.
+
 participants:
   - el_type: geth
     el_image: ethereum/client-go:latest
+    el_storage_type: full
+    el_volume_size: 51200
     cl_type: lighthouse
     cl_image: sigp/lighthouse:latest
+    cl_extra_params:
+      - "--reconstruct-historic-states"
+    cl_volume_size: 102400
+    checkpoint_sync_enabled: false
     count: 1
     validator_count: 128
 
 network_params:
   network_id: "3151908"
   deposit_contract_address: "0x4242424242424242424242424242424242424242"
-  seconds_per_slot: 2
+  seconds_per_slot: 5
   num_validator_keys_per_node: 128
+
+# Must match participant: no checkpoint sync so states from slot 0 remain queryable.
+checkpoint_sync_enabled: false
+
+# Stable localhost ports (ethereum-package port_publisher; 7 ports per EL/CL node):
+#   EL JSON-RPC (geth rpc)        → 7997 + 3 = 8000
+#   CL beacon HTTP (lighthouse)   → 8004 + 1 = 8005  (8001 is EL ws; cannot use 8001 for CL)
+#   Dora UI (first additional)    → 3001 + 0 = 3001
+#   Blockscout frontend           → container :3000 (host maps to 3000)
+port_publisher:
+  el:
+    enabled: true
+    public_port_start: 7997
+  cl:
+    enabled: true
+    public_port_start: 8004
+  additional_services:
+    enabled: true
+    public_port_start: 4001
 
 additional_services:
   - dora

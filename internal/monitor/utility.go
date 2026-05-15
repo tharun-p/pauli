@@ -9,8 +9,8 @@ import (
 	"github.com/tharun/pauli/internal/config"
 )
 
-// initBeaconNetworkClock loads genesis into network (wall-time anchor) and logs initial finality (debug).
-func initBeaconNetworkClock(ctx context.Context, client *beacon.Client, network *config.BlockchainNetwork, log zerolog.Logger) error {
+// InitBeaconNetworkClock loads genesis into network (wall-time anchor) and logs initial finality (debug).
+func InitBeaconNetworkClock(ctx context.Context, client *beacon.Client, network *config.BlockchainNetwork, log zerolog.Logger) error {
 	genesis, err := client.GetGenesis(ctx)
 	if err != nil {
 		return err

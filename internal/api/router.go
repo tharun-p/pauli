@@ -36,7 +36,6 @@ func NewRouter(store storage.Store) *gin.Engine {
 		v1.GET("/validators/:validatorIndex/attestation-rewards", h.ListAttestationRewardsScoped)
 		v1.GET("/validators/:validatorIndex/block-proposer-rewards", h.ListBlockProposerRewardsScoped)
 		v1.GET("/validators/:validatorIndex/sync-committee-rewards", h.ListSyncCommitteeRewardsScoped)
-		v1.GET("/validators/:validatorIndex/penalties", h.ListPenalties)
 	}
 
 	return r

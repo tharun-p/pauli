@@ -1,14 +1,20 @@
 # Monitor E2E Interaction Flow
 
-Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and one background **`runner.Runner.Start`** for realtime (`runner/realtime.Runner` implements **`runner.Runner`** and calls **`runner.Run(ctx, m)`**). The realtime runner owns **BlockchainNetwork** pacing and **`lastProcessedSlot`** (updated only by the final **RecordLastProcessedSlot** step after a successful chain pass), and returns concrete **`steps.Step`** values from **`steps/realtime`**. **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **BeforeStep** (wait), then the chain — each step’s **`Run`** runs on the runner goroutine; **async** steps enqueue a **`steps.Job`** (the step plus a cloned **`Env`**) when **`Run` returns `enqueue=true`**, and workers run **`RunAsync`** (e.g. validator snapshots, attestation rewards). Historical catch-up / backfill is **not** implemented yet. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
+Mental model: **Monitor** owns genesis init, starts **queue.Pool** workers, and background **`runner.Runner.Start`** goroutines for **realtime** and (when `backfill.enabled`) **backfill**. Realtime uses **BlockchainNetwork** pacing and **`lastProcessedSlot`**; **BlockIndexer** marks **`indexer_progress`** (`kind=slot`) after async success. Backfill runs **SlotPass** (gap scan via `FirstUnindexedSlot`, up to `slots_per_pass` slots behind `head - lag`) and **EpochPass** (`FirstUnindexedEpoch`, all-validator epoch data). **`runner.Run`** drives **BeforeStep → `StepChain` → `Env().Reset` → step runs → `Enqueue`** until **`ctx`** is done. **Errors and lifecycle** log at default level; **per-request / step detail** needs **`-debug`**.
 
 ```mermaid
 flowchart TD
-  Start["Monitor.Start(ctx)"] --> InitSched["initBeaconNetworkClock: genesis on network"]
+  Start["Monitor.Start(ctx)"] --> InitSched["InitBeaconNetworkClock: genesis on network"]
   InitSched --> NodeSync["logNodeSyncStatus(ctx)"]
   NodeSync --> StartWorkers["pool.Start(ctx)"]
   StartWorkers --> StartRealtime["realtime Runner.Start → runner.Run"]
+  StartWorkers --> StartBackfill["backfill Runner.Start (if enabled)"]
   StartRealtime --> RTWait
+  subgraph backfillPath [Backfill Path]
+    BFWait["BeforeStep: poll_delay when caught up"] --> BFChain["SlotPass + EpochPass"]
+    BFChain --> BFMark["indexer_progress + blocks / snapshots / rewards"]
+  end
+  StartBackfill --> BFWait
 
   subgraph realtimePath [Realtime Path]
     RTWait["BeforeStep: network.WaitPollInterval"] --> RTChain["StepChain: steps/realtime"]
@@ -51,7 +57,9 @@ flowchart LR
   M --> Q["internal/monitor/queue"]
   M --> L["internal/monitor/runner"]
   M --> Rt["internal/monitor/runner/realtime"]
+  M --> Bf["internal/monitor/runner/backfill"]
   M --> StRt["internal/monitor/steps/realtime"]
+  M --> StBf["internal/monitor/steps/backfill"]
   M --> Cf["internal/config"]
   M --> B["internal/beacon"]
 
@@ -68,9 +76,10 @@ flowchart LR
 
 ## Startup
 
-1. `Monitor.Start(ctx)` runs `initBeaconNetworkClock`, checks node sync (debug).
+1. `Monitor.Start(ctx)` runs `InitBeaconNetworkClock`, checks node sync (debug).
 2. Starts `queue.Pool` workers with `queue.StepJobRunner` (each job runs `Step.RunAsync`).
 3. Spawns **realtime** `runner.Runner.Start` on a background goroutine.
+4. When `backfill.enabled`, spawns **backfill** `runner/backfill.Runner.Start` (slot + epoch passes).
 
 ## Realtime loop
 

@@ -78,12 +78,11 @@ func fetchAndPersistAttestationRewards(ctx context.Context, client *beacon.Clien
 	}
 
 	rewards := make([]*storage.AttestationReward, 0, len(resp.TotalRewards))
-	var penalties []*storage.ValidatorPenalty
 
 	for _, r := range resp.TotalRewards {
 		totalReward := r.Head.Int64() + r.Source.Int64() + r.Target.Int64()
 
-		reward := &storage.AttestationReward{
+		rewards = append(rewards, &storage.AttestationReward{
 			ValidatorIndex: r.ValidatorIndex.Uint64(),
 			Epoch:          epoch,
 			HeadReward:     r.Head.Int64(),
@@ -91,20 +90,7 @@ func fetchAndPersistAttestationRewards(ctx context.Context, client *beacon.Clien
 			TargetReward:   r.Target.Int64(),
 			TotalReward:    totalReward,
 			Timestamp:      time.Now().UTC(),
-		}
-		rewards = append(rewards, reward)
-
-		if totalReward < 0 {
-			penalty := &storage.ValidatorPenalty{
-				ValidatorIndex: r.ValidatorIndex.Uint64(),
-				Epoch:          epoch,
-				Slot:           epochStartSlot,
-				PenaltyType:    storage.PenaltyTypeAttestationMiss,
-				PenaltyGwei:    -totalReward,
-				Timestamp:      time.Now().UTC(),
-			}
-			penalties = append(penalties, penalty)
-		}
+		})
 	}
 
 	if err := repo.SaveAttestationRewards(ctx, rewards); err != nil {
@@ -116,12 +102,6 @@ func fetchAndPersistAttestationRewards(ctx context.Context, client *beacon.Clien
 		Uint64("epoch", epoch).
 		Int("rewards_count", len(rewards)).
 		Msg("saved attestation rewards")
-
-	for _, penalty := range penalties {
-		if err := repo.SaveValidatorPenalty(ctx, penalty); err != nil {
-			log.Error().Err(err).Uint64("validator_index", penalty.ValidatorIndex).Msg("save validator penalty failed")
-		}
-	}
 
 	return nil
 }

@@ -60,6 +60,21 @@ polling_interval_slots: 1
 worker_pool_size: 10
 
 # -----------------------------------------------------------------------------
+# BACKFILL (optional)
+# -----------------------------------------------------------------------------
+# Always-on historical catch-up alongside realtime: all slots (blocks/sync/proposer)
+# and all epochs (validator balances + attestation rewards). Uses indexer_progress
+# in Postgres; tune slots_per_pass / worker_pool_size to avoid starving realtime.
+# backfill:
+#   enabled: true
+#   start_slot: 0
+#   start_epoch: 0
+#   lag_behind_head: 4
+#   slots_per_pass: 8
+#   epochs_per_pass: 2
+#   poll_delay_ms: 100
+
+# -----------------------------------------------------------------------------
 # RATE LIMITING
 # -----------------------------------------------------------------------------
 # Prevents overwhelming the beacon node with requests

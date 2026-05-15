@@ -257,36 +257,6 @@ func (r *Repository) SaveBlocks(ctx context.Context, rows []*storage.Block) erro
 	return nil
 }
 
-// SaveValidatorPenalty saves a validator penalty to the database.
-func (r *Repository) SaveValidatorPenalty(ctx context.Context, penalty *storage.ValidatorPenalty) error {
-	if penalty.Timestamp.IsZero() {
-		penalty.Timestamp = time.Now().UTC()
-	}
-
-	const query = `
-		INSERT INTO validator_penalties (
-			validator_index, epoch, slot, penalty_type, penalty_gwei, timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (validator_index, epoch, slot) DO UPDATE SET
-			penalty_type = EXCLUDED.penalty_type,
-			penalty_gwei = EXCLUDED.penalty_gwei,
-			timestamp = EXCLUDED.timestamp
-	`
-
-	_, err := r.client.Pool.Exec(ctx, query,
-		penalty.ValidatorIndex,
-		penalty.Epoch,
-		penalty.Slot,
-		penalty.PenaltyType,
-		penalty.PenaltyGwei,
-		penalty.Timestamp,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to save validator penalty: %w", err)
-	}
-	return nil
-}
-
 // GetValidatorSnapshots retrieves validator snapshots for a given validator within a slot range.
 func (r *Repository) GetValidatorSnapshots(ctx context.Context, validatorIndex uint64, fromSlot, toSlot uint64) ([]*storage.ValidatorSnapshot, error) {
 	const query = `
@@ -604,43 +574,6 @@ func scanSyncCommitteeRewardRows(rows pgx.Rows, validatorIndex uint64) ([]*stora
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate sync committee rewards: %w", err)
-	}
-	return out, nil
-}
-
-// GetValidatorPenalties returns penalties for a validator in an epoch range with pagination.
-func (r *Repository) GetValidatorPenalties(ctx context.Context, validatorIndex, fromEpoch, toEpoch uint64, limit, offset int) ([]*storage.ValidatorPenalty, error) {
-	const query = `
-		SELECT validator_index, epoch, slot, penalty_type, penalty_gwei, timestamp
-		FROM validator_penalties
-		WHERE validator_index = $1 AND epoch >= $2 AND epoch <= $3
-		ORDER BY epoch DESC, slot DESC
-		LIMIT $4 OFFSET $5
-	`
-	rows, err := r.client.Pool.Query(ctx, query, validatorIndex, fromEpoch, toEpoch, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get validator penalties: %w", err)
-	}
-	defer rows.Close()
-
-	var out []*storage.ValidatorPenalty
-	for rows.Next() {
-		var row storage.ValidatorPenalty
-		if err := rows.Scan(
-			&row.ValidatorIndex,
-			&row.Epoch,
-			&row.Slot,
-			&row.PenaltyType,
-			&row.PenaltyGwei,
-			&row.Timestamp,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan validator penalty: %w", err)
-		}
-		cp := row
-		out = append(out, &cp)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate validator penalties: %w", err)
 	}
 	return out, nil
 }

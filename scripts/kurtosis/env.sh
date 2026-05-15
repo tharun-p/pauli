@@ -1,9 +1,14 @@
 # Kurtosis URL helpers for ethpandaops/ethereum-package devnets.
+# Default enclave args (krutosis-config/kurtosis-param.yaml): archive Geth + Lighthouse
+# with --reconstruct-historic-states for Pauli backfill / historic beacon state queries.
 # Source from sibling scripts:  . "$(dirname "$0")/env.sh"
 #
 # Port IDs match package constants (see ethereum-package src/package_io/constants.star):
 #   CL beacon REST:  http
 #   EL JSON-RPC:     rpc
+#
+# With krutosis-config/kurtosis-param.yaml port_publisher enabled, host ports are stable:
+#   EL RPC :8000  CL beacon :8005  Dora :3001  Blockscout UI :3000
 #
 # Service names include a UUID prefix and depend on package version. Discover with:
 #   kurtosis enclave inspect "$KURTOSIS_ENCLAVE"

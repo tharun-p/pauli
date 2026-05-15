@@ -85,25 +85,10 @@ export const syncCommitteeRewardListResponseSchema = z.object({
   meta: listMetaSchema,
 });
 
-export const penaltyRowSchema = z.object({
-  validator_index: z.coerce.number(),
-  epoch: z.coerce.number(),
-  slot: z.coerce.number(),
-  penalty_type: z.string(),
-  penalty_gwei: z.coerce.number(),
-  timestamp: z.string(),
-});
-
-export const penaltyListResponseSchema = z.object({
-  data: z.array(penaltyRowSchema),
-  meta: listMetaSchema,
-});
-
 export type ValidatorIndexRow = z.infer<typeof validatorIndexRowSchema>;
 export type ValidatorSnapshot = z.infer<typeof validatorSnapshotSchema>;
 export type ValidatorSnapshotListResponse = z.infer<typeof validatorSnapshotListResponseSchema>;
 export type AttestationRewardRow = z.infer<typeof attestationRewardRowSchema>;
 export type BlockProposerRewardRow = z.infer<typeof blockProposerRewardRowSchema>;
 export type SyncCommitteeRewardRow = z.infer<typeof syncCommitteeRewardRowSchema>;
-export type PenaltyRow = z.infer<typeof penaltyRowSchema>;
 export type ListMeta = z.infer<typeof listMetaSchema>;
