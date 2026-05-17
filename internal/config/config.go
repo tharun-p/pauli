@@ -29,10 +29,11 @@ type Config struct {
 	WorkerPoolSize      int           `yaml:"worker_pool_size"`
 	RateLimit           RateLimitConf `yaml:"rate_limit"`
 	HTTP                HTTPConf      `yaml:"http"`
-	// DatabaseDriver is optional; only "postgres" is supported (default when empty).
-	DatabaseDriver string       `yaml:"database_driver,omitempty"`
-	Postgres       PostgresConf `yaml:"postgres"`
-	Backfill       BackfillConf `yaml:"backfill"`
+	// DatabaseDriver selects storage: "postgres" (default) or "clickhouse".
+	DatabaseDriver string         `yaml:"database_driver,omitempty"`
+	Postgres       PostgresConf   `yaml:"postgres"`
+	ClickHouse     ClickHouseConf `yaml:"clickhouse"`
+	Backfill       BackfillConf   `yaml:"backfill"`
 }
 
 // BackfillConf configures the historical backfill runner (slot + epoch tracks).
@@ -108,6 +109,37 @@ func (p *PostgresConf) ApplyDefaults() {
 	}
 }
 
+// ClickHouseConf configures the ClickHouse connection (monitor and API).
+// Hot retention (ttl_days) is enforced via table TTL in sql/migrations_ch (default 90 days, then DELETE).
+type ClickHouseConf struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
+	MaxConns int    `yaml:"max_conns"`
+	TTLDays  int    `yaml:"ttl_days"`
+}
+
+// ApplyDefaults sets default values for optional ClickHouse fields.
+func (c *ClickHouseConf) ApplyDefaults() {
+	if c.Port == 0 {
+		c.Port = 9000
+	}
+	if c.User == "" {
+		c.User = "default"
+	}
+	if c.Database == "" {
+		c.Database = "pauli"
+	}
+	if c.MaxConns <= 0 {
+		c.MaxConns = 10
+	}
+	if c.TTLDays <= 0 {
+		c.TTLDays = 90
+	}
+}
+
 // Timeout returns the HTTP timeout as a time.Duration.
 func (h *HTTPConf) Timeout() time.Duration {
 	return time.Duration(h.TimeoutSeconds) * time.Second
@@ -165,6 +197,19 @@ func validatePostgres(p *PostgresConf) error {
 	return nil
 }
 
+func validateClickHouse(c *ClickHouseConf) error {
+	if c.Host == "" {
+		return fmt.Errorf("clickhouse host is required")
+	}
+	if c.Port == 0 {
+		return fmt.Errorf("clickhouse port is required")
+	}
+	if c.Database == "" {
+		return fmt.Errorf("clickhouse database is required")
+	}
+	return nil
+}
+
 // validate checks the configuration for required fields.
 func (c *Config) validate() error {
 	if c.BeaconNodeURL == "" {
@@ -176,10 +221,14 @@ func (c *Config) validate() error {
 		if err := validatePostgres(&c.Postgres); err != nil {
 			return err
 		}
+	case "clickhouse":
+		if err := validateClickHouse(&c.ClickHouse); err != nil {
+			return err
+		}
 	case "scylladb":
-		return fmt.Errorf("database_driver \"scylladb\" is no longer supported; use postgres only")
+		return fmt.Errorf("database_driver \"scylladb\" is no longer supported; use postgres or clickhouse")
 	default:
-		return fmt.Errorf("unsupported database_driver: %s (only postgres is supported)", c.DatabaseDriver)
+		return fmt.Errorf("unsupported database_driver: %s (use postgres or clickhouse)", c.DatabaseDriver)
 	}
 	return nil
 }
@@ -211,6 +260,7 @@ func (c *Config) setDefaults() {
 		c.DatabaseDriver = "postgres"
 	}
 	c.Postgres.ApplyDefaults()
+	c.ClickHouse.ApplyDefaults()
 	c.Backfill.setDefaults()
 }
 

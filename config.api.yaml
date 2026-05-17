@@ -1,6 +1,9 @@
-# Configuration for cmd/pauli-api (REST server; Postgres only).
+# Configuration for cmd/pauli-api (REST server).
 
 listen: ":8080"
+
+# database_driver: postgres (default) | clickhouse
+database_driver: "postgres"
 
 postgres:
   host: "127.0.0.1"
@@ -11,3 +14,12 @@ postgres:
   ssl_mode: "disable"
   max_conns: 10
   ttl_days: 90
+
+# clickhouse:
+#   host: "127.0.0.1"
+#   port: 9002
+#   user: "default"
+#   password: ""
+#   database: "default"
+#   max_conns: 10
+#   ttl_days: 90

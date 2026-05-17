@@ -1,6 +1,6 @@
 # Pauli - Ethereum Validator Indexing Service
 
-`pauli` indexes validator data from a Beacon Node and persists it to **PostgreSQL**.
+`pauli` indexes validator data from a Beacon Node and persists it to **PostgreSQL** or **ClickHouse** (configurable via `database_driver`).
 
 This project is a data indexing service for validator operations. It is **not** a governance framework or protocol decision system.
 
@@ -16,7 +16,7 @@ This project is a data indexing service for validator operations. It is **not** 
 ## Requirements
 
 - Go `1.24+`
-- **PostgreSQL** (16+ is typical)
+- **PostgreSQL** (16+ is typical) or **ClickHouse** (24+; hot retention via table TTL, default 90 days)
 - Access to an Ethereum Beacon Node API (Lighthouse, Prysm, Teku, etc.)
 
 ## Quick Start
@@ -30,7 +30,9 @@ go build -o validator-monitor ./cmd/pauli
 
 ## Config
 
-`database_driver` defaults to `postgres` when omitted. ScyllaDB/Cassandra is not supported.
+`database_driver` defaults to `postgres` when omitted (`postgres` or `clickhouse`). ScyllaDB/Cassandra is not supported.
+
+**PostgreSQL example:**
 
 ```yaml
 beacon_node_url: "http://localhost:5052"
@@ -62,7 +64,24 @@ postgres:
   ttl_days: 90
 ```
 
-A fuller sample is in `config.example.yaml`. For local Postgres, see `docker.compose.postgres`.
+**ClickHouse example** (all queries go through ClickHouse):
+
+```yaml
+database_driver: clickhouse
+
+clickhouse:
+  host: "127.0.0.1"
+  port: 9002
+  user: "default"
+  password: ""
+  database: "default"
+  max_conns: 10
+  ttl_days: 90
+```
+
+Fact tables (`validator_epoch_records`, `blocks`) use `TTL ... + INTERVAL 90 DAY DELETE` on local disk. Data older than 90 days is removed from ClickHouse. `indexer_progress` has no TTL. S3/Glacier archival is planned for a later release.
+
+A fuller sample is in `config.example.yaml`. For local Postgres, see `docker.compose.postgres`. For ClickHouse, see `docker.compose.clickhouse`.
 
 ## Run Options
 
@@ -79,7 +98,7 @@ nohup ./validator-monitor -config config.yaml > monitor.log 2>&1 &
 
 ## REST API binary (`pauli-api`)
 
-`pauli-api` is a separate executable that serves read-only HTTP endpoints backed by the same PostgreSQL database as the monitor. It does **not** require `beacon_node_url` or `validators` in its config.
+`pauli-api` is a separate executable that serves read-only HTTP endpoints backed by the same database as the monitor (`postgres` or `clickhouse`). It does **not** require `beacon_node_url` or `validators` in its config.
 
 Build and run:
 
@@ -88,7 +107,7 @@ go build -o pauli-api ./cmd/pauli-api
 ./pauli-api -config config.api.yaml
 ```
 
-Use **`config.api.example.yaml`** as a template (`listen` + `postgres` only).
+Use **`config.api.yaml`** as a template (`listen` + `database_driver` + storage section).
 
 Endpoints:
 
@@ -104,7 +123,7 @@ Pauli currently stores validator-focused epoch data in `validator_epoch_records`
 Indexing uses two runners when backfill is enabled:
 
 - **Realtime** (`runner/realtime`): one head slot per poll (`polling_interval_slots` × slot duration), steps in `steps/realtime`.
-- **Backfill** (`runner/backfill`): walks missing slots and epochs up to `head - lag_behind_head`, steps in `steps/backfill`, progress in Postgres `indexer_progress`.
+- **Backfill** (`runner/backfill`): walks missing slots and epochs up to `head - lag_behind_head`, steps in `steps/backfill`, progress in `indexer_progress`.
 
 See **`doc/monitor-e2e-flow.md`** for diagrams.
 
@@ -169,7 +188,7 @@ flowchart LR
     I --> H
     G --> J[RunAsync → Repository]
     I --> K[(indexer_progress)]
-    J --> L[(PostgreSQL)]
+    J --> L[(Postgres or ClickHouse)]
 ```
 
 ## Project Layout
@@ -178,7 +197,7 @@ flowchart LR
 pauli/
 ├── cmd/
 │   ├── pauli/                # validator monitor binary
-│   ├── pauli-api/            # REST API binary (read Postgres)
+│   ├── pauli-api/            # REST API binary (read storage backend)
 │   ├── pauli-backfill/       # one-shot historical slot/epoch backfill
 │   └── devnet-equivocate/    # Kurtosis-only: post conflicting attestations (requires exported BLS secret)
 ├── config.yaml
@@ -198,9 +217,11 @@ pauli/
 │   │       └── steps/realtime/  # concrete indexing steps
 │   ├── storage/              # Store/Repository interfaces + models
 │   ├── storage/postgres/
-│   └── store/                # wires PostgreSQL store
+│   ├── storage/clickhouse/
+│   └── store/                # database driver factory
 ├── sql/
-│   └── migrations_pg/        # SQL migrations
+│   ├── migrations_pg/
+│   └── migrations_ch/
 ├── scripts/
 │   └── kurtosis/             # env helpers + EL tx spam for Kurtosis devnets
 └── pkg/

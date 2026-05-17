@@ -30,7 +30,7 @@ type Repository interface {
 	Close() error
 }
 
-// Store abstracts the database backend (PostgreSQL).
+// Store abstracts the database backend (PostgreSQL or ClickHouse).
 type Store interface {
 	RunMigrations() error
 	HealthCheck() error

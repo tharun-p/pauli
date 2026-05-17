@@ -105,9 +105,11 @@ http:
   max_retries: 3
 
 # -----------------------------------------------------------------------------
-# DATABASE (PostgreSQL)
+# DATABASE
 # -----------------------------------------------------------------------------
-# Optional; defaults to postgres when omitted.
+# database_driver: postgres (default) | clickhouse
+# For ClickHouse, hot retention only: rows older than ttl_days are deleted (default 90).
+# S3/Glacier archival is not implemented yet.
 database_driver: "postgres"
 
 postgres:
@@ -119,6 +121,15 @@ postgres:
   ssl_mode: "disable"
   max_conns: 10
   ttl_days: 90
+
+# clickhouse:
+#   host: "127.0.0.1"
+#   port: 9002
+#   user: "default"
+#   password: ""
+#   database: "default"
+#   max_conns: 10
+#   ttl_days: 90
 
 
 # =============================================================================
